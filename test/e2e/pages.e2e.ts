@@ -16,6 +16,7 @@ import type { ElectronApplication, Page } from 'playwright'
 import { compareTypeNames, primaryQuestionType } from '../../src/shared/library.ts'
 import { numberItems, numberLabel } from '../../src/shared/numbering.ts'
 import { buildTo, launchApp, ROOT } from '../../scripts/e2e/app.ts'
+import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
 import { ENGLISH_URL, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-pages-'))
@@ -23,6 +24,7 @@ mkdirSync(evidence, { recursive: true })
 // 各套端到端各用自己的构建目录；本套用 out-pages5，与其余各套的构建目录互不重叠
 const OUT = 'out-pages5'
 process.env.EWB_IMPORT_GAP_MS = '300' // 入库的页间间隔缩短，测试不必干等
+skipWithoutFixtures('试题库与试卷库页面端到端')
 buildTo(OUT)
 // 用脚本路径启动时 Electron 在 main 目录里找 package.json，找不到就报 Electron 自己的版本号；
 // 放一份与根目录一致的，设置页才读到应用的版本号（正式运行读的就是 package.json）

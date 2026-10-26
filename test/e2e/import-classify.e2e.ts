@@ -8,12 +8,14 @@ import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
+import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
 import { ENGLISH_URL, FIXTURES, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
 const PHYSICS_URL = 'https://zujuan.xkw.com/4p9000002.html'
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-import-classify-'))
 mkdirSync(evidence, { recursive: true })
 process.env.EWB_IMPORT_GAP_MS = '300'
+skipWithoutFixtures('入库归类端到端')
 buildTo('out-import3')
 const { app, window } = await launchApp({ outDir: 'out-import3' })
 

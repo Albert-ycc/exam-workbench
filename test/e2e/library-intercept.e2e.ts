@@ -2,10 +2,11 @@
 // library / import-classify / pages 三套共用。
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
+import { FIXTURES_DIR } from '../../scripts/fixtures.ts'
 
-export const FIXTURES = resolve(import.meta.dirname, '../fixtures')
+export const FIXTURES = FIXTURES_DIR
 export const PAPER_URL = 'https://zujuan.xkw.com/2p3543573.html'
 export const QUESTION_URL = 'https://zujuan.xkw.com/2q17150767.html'
 export const ENGLISH_URL = 'https://zujuan.xkw.com/2p1111111.html'

@@ -19,9 +19,11 @@ import { preparePage, toPreview } from '../src/main/library/prepare.ts'
 import { deleteQuestion, listQuestionTypes, listQuestions, listSourcePapers } from '../src/main/library/queries.ts'
 import { DIFFICULTY_TIERS, difficultyTier } from '../src/shared/classify.ts'
 import { classifyZujuanUrl, normalizeImportUrl, primaryQuestionType, splitPastedLinks } from '../src/shared/library.ts'
+import { FIXTURES_DIR, skipWithoutFixtures } from './fixtures.ts'
 
 const ROOT = resolve(import.meta.dirname, '..')
-const FIXTURES = join(ROOT, 'test/fixtures')
+const FIXTURES = FIXTURES_DIR
+skipWithoutFixtures('入库测试')
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-import-'))
 mkdirSync(evidence, { recursive: true })
 

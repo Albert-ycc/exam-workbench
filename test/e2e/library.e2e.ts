@@ -8,12 +8,16 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
+import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
 import { installIntercept, PAPER_URL, QUESTION_URL, VERIFY_FOREVER_URL, VERIFY_URL } from './library-intercept.e2e.ts'
 
 const mode = process.argv.includes('--online') || process.env.EWB_LIBRARY_ONLINE === '1' ? 'online' : 'offline'
 const evidence = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? mkdtempSync(join(tmpdir(), 'ewb-library-e2e-'))
 mkdirSync(evidence, { recursive: true })
-if (mode === 'offline') process.env.EWB_IMPORT_GAP_MS = '300'
+if (mode === 'offline') {
+  skipWithoutFixtures('入库与试题库端到端（离线模式）')
+  process.env.EWB_IMPORT_GAP_MS = '300'
+}
 buildTo('out-lib3')
 // 离线模式：域名解析全部屏蔽，采集页在拦截生效前发出的请求也出不了网；online 模式才真正访问组卷网
 const { app, window, dataDir } = await launchApp({ outDir: 'out-lib3', online: mode === 'online' })

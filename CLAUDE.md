@@ -28,7 +28,7 @@ Electron 44 + electron-vite 5 + React 19 + TypeScript 5.9；SQLite 用内置 `no
 ## 不要做
 
 - 不要驱动本机的 Word / WPS 等桌面应用做验证；Word 效果用 LibreOffice 转 PDF 看。
-- 不访问或少访问组卷网：测试用 `test/fixtures` 的页面样本与离线拦截；不绕验证码、不伪装自动化。
+- 不访问或少访问组卷网：测试用 `test/fixtures` 的页面样本与离线拦截；不绕验证码、不伪装自动化。样本 `*.html` 含学科网试题内容，在 .gitignore 里、不进公开仓库（2026-10-26 已从历史里抹掉），没有样本时依赖它的测试走 `scripts/fixtures.ts` 的 `skipWithoutFixtures` 跳过并说明。
 - 并行开发时各自构建到 `out-<名称>/`，不覆盖别人的构建目录（现有端到端的构建目录写死在各脚本里，同一目录由 `buildTo` 的锁排队，整套跑完才轮到下一套）；不用 `pkill -f` 按名字杀进程。
 
 ## 现状与下一步

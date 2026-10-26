@@ -9,14 +9,15 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
+import { FIXTURES_DIR, skipWithoutFixtures } from '../../scripts/fixtures.ts'
 import type { DraftSection, ExportOptions, LibraryQuestion, PaperDraft } from '../../src/shared/domain.ts'
 import { primaryQuestionType } from '../../src/shared/library.ts'
 
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-real-'))
-const FIXTURES = resolve(import.meta.dirname, '../fixtures')
+const FIXTURES = FIXTURES_DIR
 const filesDir = join(evidence, 'files')
 const convDir = join(evidence, 'docx-as-pdf')
 for (const d of ['files', 'docx-as-pdf']) rmSync(join(evidence, d), { recursive: true, force: true })
@@ -29,6 +30,7 @@ const PHYSICS_URL = 'https://zujuan.xkw.com/2p4444444.html'
 
 const sh = (cmd: string, args: string[]): string => execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
 
+skipWithoutFixtures('真实数据导出端到端')
 buildTo('out-export3')
 const reuse = process.env.EWB_REAL_DATA
 let dataDir: string | undefined

@@ -2,7 +2,7 @@
 
 Windows 桌面应用：从组卷网入库试题，拖拽组卷，在应用内修改题目、设分值，按配置下载试卷（PDF / Word）与答题卡（PDF），每份试卷有版本记录；试题按章节、知识点、难度、标签归类筛选，试卷按分类与标签整理。Electron 44 + React 19 + TypeScript，数据库用 Node 内置的 `node:sqlite`，没有原生模块，在 Mac 上直接交叉打 Windows 安装包。
 
-产品方案（三轮）是本地文档，不随仓库发布；代码里的约定见 `CLAUDE.md`。`test/fixtures/` 是组卷网公开试卷页（未登录）去掉脚本后的保存件，只用于离线测试。
+产品方案（三轮）是本地文档，不随仓库发布；代码里的约定见 `CLAUDE.md`。`test/fixtures/*.html` 是组卷网页面的本地保存件，含学科网试题内容，也不随仓库发布：没有它们时入库单测与 `library`、`import-classify`、`pages`、`export-real` 四套端到端会打印原因后跳过，其余测试照跑；怎么补见 `test/fixtures/README.md`。
 
 ## 常用命令
 
@@ -40,7 +40,7 @@ Windows 桌面应用：从组卷网入库试题，拖拽组卷，在应用内修
 | `src/renderer/src/components/ui/` | 界面底座：方向 C 色板下的按钮、表单、弹窗、抽屉、提示条、红笔记号等通用组件；`format.ts` 是界面共用的时间格式、文件名、错误文案整理 |
 | `src/renderer/src/components/classify/` | 归类共用组件：章节 / 难度 / 知识点 / 标签筛选块、打标签小框、管理标签弹窗 |
 | `src/renderer/src/components/` | 题目显示 `QuestionHtml`、编辑器（含试卷结构栏与分值表、题库栏「更多筛选」）、版本历史、试题库（章节管理、批量操作条）、试卷库（分类栏、批量操作条）、下载弹窗 |
-| `test/fixtures/` | 组卷网真实页面样本（数学、英语、物理试卷页，数学单题页） |
+| `test/fixtures/` | 组卷网真实页面样本（数学、英语、物理试卷页，数学单题页），只在本地，`*.html` 不进仓库 |
 | `build/installer.nsh` | 安装程序的自定义段：更新或卸载时先用 `--quit` 请程序保存并退出，等不到再强制结束进程树，仍在才提示去任务管理器 |
 
 ## 登录保持自检
