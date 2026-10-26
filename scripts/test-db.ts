@@ -66,8 +66,33 @@ try {
     again.close()
   })
 
+  check('归类约束：知识点与难度只读、章节两级、题目标签与试卷标签不能混用', () => {
+    const c = openDatabase(dir)
+    c.prepare("INSERT INTO questions (zujuan_qid, stem_html, fingerprint, created_at) VALUES ('kq', 'x', 'fpk', ?)").run(now)
+    const qid = (c.prepare("SELECT id FROM questions WHERE zujuan_qid = 'kq'").get() as { id: number }).id
+    c.prepare("INSERT INTO knowledge_points (id, name, subject) VALUES (4740, '倒数', 'czsx')").run()
+    c.prepare('INSERT INTO question_knowledge (question_id, knowledge_id) VALUES (?, 4740)').run(qid)
+    c.prepare('INSERT INTO question_difficulty (question_id, coefficient) VALUES (?, 0.65)').run(qid)
+    assert.throws(() => c.prepare('UPDATE question_knowledge SET position = 1').run(), /只读/)
+    assert.throws(() => c.prepare('UPDATE question_difficulty SET coefficient = 0.1').run(), /只读/)
+    assert.throws(() => c.prepare('INSERT INTO question_difficulty (question_id, coefficient) VALUES (?, 1.5)').run(qid), /CHECK|UNIQUE|constraint/)
+    c.prepare("INSERT INTO chapters (id, parent_id, name, created_at) VALUES (1, NULL, '第一章', ?), (2, 1, '1.1', ?)").run(now, now)
+    assert.throws(() => c.prepare("INSERT INTO chapters (parent_id, name, created_at) VALUES (2, '1.1.1', ?)").run(now), /两级/)
+    assert.throws(() => c.prepare("INSERT INTO chapters (parent_id, name, created_at) VALUES (NULL, '第一章', ?)").run(now), /UNIQUE/)
+    c.prepare("INSERT INTO tags (id, scope, name, created_at) VALUES (1, 'question', '易错', ?), (2, 'paper', '易错', ?)").run(now, now)
+    assert.throws(() => c.prepare("INSERT INTO tags (scope, name, created_at) VALUES ('question', 'ABC', ?), ('question', 'abc', ?)").run(now, now), /UNIQUE/)
+    assert.throws(() => c.prepare('INSERT INTO question_tags (question_id, tag_id) VALUES (?, 2)').run(qid), /题目标签/)
+    c.prepare("INSERT INTO papers (id, title, draft_json, created_at, updated_at) VALUES (50, '卷', '{}', ?, ?)").run(now, now)
+    assert.throws(() => c.prepare('INSERT INTO paper_tags (paper_id, tag_id) VALUES (50, 1)').run(), /试卷标签/)
+    c.close()
+  })
+
   check('反向验证：拆掉触发器后同样的操作会成功', () => {
     const raw = openDatabase(dir)
+    raw.exec('DROP TRIGGER question_knowledge_readonly; DROP TRIGGER chapters_two_levels; DROP TRIGGER question_tags_scope;')
+    raw.prepare('UPDATE question_knowledge SET position = 1').run()
+    raw.prepare("INSERT INTO chapters (parent_id, name, created_at) VALUES (2, '1.1.1', ?)").run(now)
+    raw.prepare("INSERT INTO question_tags (question_id, tag_id) SELECT id, 2 FROM questions WHERE zujuan_qid = 'kq'").run()
     raw.exec('DROP TRIGGER questions_readonly; DROP TRIGGER paper_versions_no_update; DROP TRIGGER paper_versions_sequential;')
     raw.prepare("UPDATE questions SET stem_html = '改过' WHERE id = 1").run()
     const paperId = raw.prepare("INSERT INTO papers (title, draft_json, created_at, updated_at) VALUES ('试卷2', '{}', ?, ?)").run(now, now).lastInsertRowid

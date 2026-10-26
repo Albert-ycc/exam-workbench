@@ -1,8 +1,9 @@
 // 编辑器左栏：可筛选的试题库。题目一行一道（方向 C 的密排列表），点「加入试卷」、勾选后批量加入，或拖到右侧试卷。
 // 筛选条件按试卷保存（S11）；换筛选回到列表顶部（M4）；已加入的题可以隐藏（F4）。
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import { useDraggable } from '@dnd-kit/core'
-import { primaryQuestionType } from '@shared/library'
+import type { Chapter, Tag as TagItem } from '@shared/classify'
+import { primaryQuestionType, type LibraryFacets } from '@shared/library'
 import { hasVisibleContent } from '@shared/numbering'
 import type { LibraryQuestion, SourcePaper } from '@shared/domain'
 import { navigateTo } from '../../navigation'
@@ -10,7 +11,9 @@ import { IconChevronDown, IconPlus, IconScissors, IconSearch } from '../../icons
 import { Button, Checkbox, EmptyState, RedPen, RedTick, Select, Tag, TextInput, usePersistentState } from '../ui'
 import { errorMessage } from './format'
 import { IconPanelLeft } from './icons'
+import { classFilter, classKey, describeClassFilters, isStoredFilters, NO_CLASS, NO_FILTERS, normalizeFilters, pruneMissing, withoutCondition, type ClassCondition, type Filters, type StoredFilters } from './libraryFilters'
 import MemoQuestionHtml from './MemoQuestionHtml'
+import { ActiveConditions, MoreFilters } from './MoreFilters'
 import { useClamped } from './useOverflow'
 
 const PAGE_SIZE = 60
@@ -23,20 +26,6 @@ interface Props {
   collapsed: boolean
   onToggleCollapsed(): void
   onAdd(questions: LibraryQuestion[]): void
-}
-
-interface Filters {
-  questionType: string
-  sourcePaperId: string
-  keyword: string
-  hideAdded: boolean
-}
-
-const NO_FILTERS: Filters = { questionType: '', sourcePaperId: '', keyword: '', hideAdded: false }
-
-const isFilters = (value: unknown): value is Filters => {
-  const v = value as Partial<Filters> | null
-  return !!v && typeof v.questionType === 'string' && typeof v.sourcePaperId === 'string' && typeof v.keyword === 'string' && typeof v.hideAdded === 'boolean'
 }
 
 const stop = (event: { stopPropagation(): void }): void => event.stopPropagation()
@@ -109,8 +98,29 @@ const LibraryRow = memo(function LibraryRow({ question, addedNos, dragging, sele
 function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapsed, onAdd }: Props) {
   const [types, setTypes] = useState<string[]>([])
   const [sources, setSources] = useState<SourcePaper[]>([])
-  const [filters, setFilters] = usePersistentState<Filters>(`ewb.editor.filters.${paperId}`, NO_FILTERS, { validate: isFilters })
+  // 记住的条件可能是升级前写的（没有「更多筛选」那四项）：按旧形状放行，读出来再补默认值，不让整份作废
+  const [stored, setStored] = usePersistentState<StoredFilters>(`ewb.editor.filters.${paperId}`, NO_FILTERS, { validate: isStoredFilters })
+  const filters = useMemo(() => normalizeFilters(stored), [stored])
+  const setFilters = useCallback(
+    (action: SetStateAction<Filters>): void =>
+      setStored((prev) => {
+        const base = normalizeFilters(prev)
+        const next = typeof action === 'function' ? action(base) : action
+        return next === base ? prev : next // 没改什么就不写回，旧形状的记录原样留着直到真的改了条件
+      }),
+    [setStored]
+  )
   const [keywordInput, setKeywordInput] = useState(filters.keyword)
+  const [chapters, setChapters] = useState<Chapter[] | null>(null)
+  const [tags, setTags] = useState<TagItem[] | null>(null)
+  const [facets, setFacets] = useState<LibraryFacets | null>(null)
+  const [knowledgeNames, setKnowledgeNames] = useState<ReadonlyMap<number, string>>(new Map())
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [optionsError, setOptionsError] = useState<string | null>(null)
+  const [facetsError, setFacetsError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
+  const optionsLoaded = useRef(false)
+  const facetRequest = useRef(0)
   const [items, setItems] = useState<LibraryQuestion[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -134,6 +144,58 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
     return () => window.clearTimeout(timer)
   }, [keywordInput, setFilters])
 
+  // 章节与标签目录：进来读一次（条件小条要名称），每次打开弹层再读一次（可能刚在试题库页改过）
+  useEffect(() => {
+    if (!moreOpen && optionsLoaded.current) return
+    let live = true
+    void Promise.all([window.workbench.library.listChapters(), window.workbench.library.listTags()])
+      .then(([c, t]) => {
+        if (!live) return
+        optionsLoaded.current = true
+        setChapters(c)
+        setTags(t)
+        setOptionsError(null)
+      })
+      .catch((e) => live && setOptionsError(errorMessage(e)))
+    return () => {
+      live = false
+    }
+  }, [moreOpen, retry])
+
+  // 别处删掉的章节、标签从条件里去掉，否则会一直筛出 0 道题还说不清为什么
+  useEffect(() => {
+    if (chapters || tags) setFilters((f) => pruneMissing(f, chapters, tags))
+  }, [chapters, tags, setFilters])
+
+  // 各选项的题数按「当前全部条件」算；只在弹层打开、或有选中的知识点（要它的名称）时才读
+  const ck = classKey(filters)
+  const needFacets = moreOpen || filters.knowledgeIds.length > 0
+  useEffect(() => {
+    if (!needFacets) return
+    const id = ++facetRequest.current
+    void window.workbench.library
+      .facets({
+        questionType: filters.questionType || undefined,
+        sourcePaperId: filters.sourcePaperId ? Number(filters.sourcePaperId) : undefined,
+        keyword: filters.keyword || undefined,
+        ...classFilter(filters)
+      })
+      .then((f) => {
+        if (id !== facetRequest.current) return
+        setFacets(f)
+        setFacetsError(null)
+        setKnowledgeNames((prev) => {
+          const next = new Map(prev)
+          for (const k of f.knowledge) next.set(k.id, k.name)
+          return next
+        })
+      })
+      .catch((e) => {
+        if (id === facetRequest.current) setFacetsError(errorMessage(e))
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needFacets, filters.questionType, filters.sourcePaperId, filters.keyword, ck, retry])
+
   const load = async (offset: number): Promise<void> => {
     const id = ++request.current
     setLoading(true)
@@ -142,6 +204,7 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
         questionType: filters.questionType || undefined,
         sourcePaperId: filters.sourcePaperId ? Number(filters.sourcePaperId) : undefined,
         keyword: filters.keyword || undefined,
+        ...classFilter(filters),
         limit: PAGE_SIZE,
         offset
       })
@@ -162,7 +225,7 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
     setSelected(new Set())
     void load(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.questionType, filters.sourcePaperId, filters.keyword])
+  }, [filters.questionType, filters.sourcePaperId, filters.keyword, ck])
 
   const visible = useMemo(() => (filters.hideAdded ? items.filter((q) => !addedAt.has(q.id)) : items), [items, filters.hideAdded, addedAt])
 
@@ -172,10 +235,17 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.hideAdded, loading, visible.length, items.length, total])
 
+  const classConditions = useMemo(() => describeClassFilters(filters, { chapters, tags, knowledgeNames }), [filters, chapters, tags, knowledgeNames])
+  // 无结果时写出的条件：「章节「第一章」「未归章节」」这样一项一组
+  const classText = (['chapter', 'difficulty', 'knowledge', 'tag'] as const).flatMap((kind) => {
+    const items = classConditions.filter((c) => c.kind === kind)
+    return items.length ? [`${items[0].kindLabel}${items.map((c) => `「${c.label}」`).join('')}`] : []
+  })
   const conditions = [
     filters.questionType && `题型「${filters.questionType}」`,
     filters.sourcePaperId && `来源卷「${sources.find((s) => String(s.id) === filters.sourcePaperId)?.title ?? '已选'}」`,
-    filters.keyword && `关键词「${filters.keyword}」`
+    filters.keyword && `关键词「${filters.keyword}」`,
+    ...classText
   ].filter(Boolean) as string[]
   const filtered = conditions.length > 0
 
@@ -183,6 +253,9 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
     setKeywordInput('')
     setFilters((f) => ({ ...NO_FILTERS, hideAdded: f.hideAdded }))
   }
+  const patchClass = (next: Partial<Pick<Filters, 'chapterIds' | 'knowledgeIds' | 'difficulties' | 'tagIds'>>): void => setFilters((f) => ({ ...f, ...next }))
+  const clearClass = (): void => setFilters((f) => ({ ...f, ...NO_CLASS }))
+  const removeCondition = (item: ClassCondition): void => setFilters((f) => withoutCondition(f, item))
 
   const pick = (id: number, checked: boolean): void =>
     setSelected((prev) => {
@@ -220,7 +293,24 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
             <Select aria-label="题型" value={filters.questionType} onChange={(v) => setFilters((f) => ({ ...f, questionType: v }))} options={typeOptions} />
             <Select aria-label="来源卷" value={filters.sourcePaperId} onChange={(v) => setFilters((f) => ({ ...f, sourcePaperId: v }))} options={sourceOptions} />
           </div>
-          <TextInput value={keywordInput} onChange={setKeywordInput} placeholder="题干关键词" aria-label="题干关键词" leading={<IconSearch size={16} />} clearable />
+          <div className="ed-lib-search">
+            <TextInput className="ed-lib-kw" value={keywordInput} onChange={setKeywordInput} placeholder="题干关键词" aria-label="题干关键词" leading={<IconSearch size={16} />} clearable />
+            <MoreFilters
+              open={moreOpen}
+              onOpenChange={setMoreOpen}
+              filters={filters}
+              patch={patchClass}
+              clearClass={clearClass}
+              chapters={chapters ?? []}
+              tags={tags ?? []}
+              facets={facets}
+              error={facetsError ?? optionsError}
+              onRetry={() => setRetry((n) => n + 1)}
+              total={total}
+              filtered={filtered}
+            />
+          </div>
+          <ActiveConditions items={classConditions} onRemove={removeCondition} onClear={clearClass} />
           <div className="ed-lib-count">
             <span>
               <span data-testid="lib-total">{error ? '读取失败' : `共 ${total} 道题`}</span>

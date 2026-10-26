@@ -10,11 +10,19 @@ export function qidExists(db: DatabaseSync, qid: string): boolean {
   return Boolean(db.prepare('SELECT 1 FROM questions WHERE zujuan_qid = ? LIMIT 1').get(qid))
 }
 
-// 库里是否已有这道题：有编号的题，编号相同或与「无编号入库的同内容题」相同算重复；无编号的题，内容指纹相同算重复
+// 库里与之重复的那道题的 id：有编号的题，编号相同或与「无编号入库的同内容题」相同算重复；无编号的题，内容指纹相同算重复。
+// 已在库的题补知识点、难度时用它找到要补的那一道
+export function duplicateId(db: DatabaseSync, qid: string | null, fingerprint: string): number | null {
+  if (qid) {
+    const byQid = db.prepare('SELECT id FROM questions WHERE zujuan_qid = ? LIMIT 1').get(qid) as { id: number } | undefined
+    if (byQid) return byQid.id
+  }
+  const row = db.prepare('SELECT id FROM questions WHERE fingerprint = ? AND (? IS NULL OR zujuan_qid IS NULL) ORDER BY id LIMIT 1').get(fingerprint, qid) as { id: number } | undefined
+  return row ? row.id : null
+}
+
 export function isDuplicate(db: DatabaseSync, qid: string | null, fingerprint: string): boolean {
-  if (qid && qidExists(db, qid)) return true
-  const row = db.prepare('SELECT 1 FROM questions WHERE fingerprint = ? AND (? IS NULL OR zujuan_qid IS NULL) LIMIT 1').get(fingerprint, qid)
-  return Boolean(row)
+  return duplicateId(db, qid, fingerprint) !== null
 }
 
 // 同一次入库任务里已经出现过的题（尚未写入库，也要算重复）

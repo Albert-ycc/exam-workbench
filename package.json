@@ -1,7 +1,7 @@
 {
   "name": "exam-workbench",
   "productName": "组卷工作台",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "组卷工作台：从组卷网入库试题、拖拽组卷、按配置导出 PDF / Word",
   "author": "Albert",
   "private": true,
@@ -15,7 +15,8 @@
     "dist:mac": "npm run build && electron-builder --mac dir",
     "test:db": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-db.ts",
     "test:papers": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-papers.ts",
-    "test": "npm run test:db && npm run test:structure && npm run test:papers && npm run test:export && npm run test:import",
+    "test": "npm run test:db && npm run test:structure && npm run test:papers && npm run test:classify && npm run test:export && npm run test:import",
+    "test:classify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-classify.ts",
     "e2e:smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/smoke.e2e.ts",
     "seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/seed-dev.ts",
     "test:export": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-export.ts",

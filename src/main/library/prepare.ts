@@ -1,8 +1,10 @@
 // 把页面拆题结果整理成入库预览：去重、下载图片、计算内容指纹。不依赖 Electron，下载函数由调用方注入。
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
+import type { KnowledgeRef } from '../../shared/classify.ts'
 import { classifyZujuanUrl, ZUJUAN_HOST, type ImportPreview } from '../../shared/library.ts'
-import { fingerprintOf, isDuplicate, qidExists, SeenQuestions } from './dedupe.ts'
+import { metaGaps, sanitizeMeta } from './classify.ts'
+import { duplicateId, fingerprintOf, qidExists, SeenQuestions } from './dedupe.ts'
 import type { ExtractedPage, ExtractedQuestion } from './extract-script.ts'
 import { downloadImages, type DownloadedImage, type ImageFetcher } from './images.ts'
 
@@ -20,6 +22,10 @@ export interface PreparedQuestion {
   failedImages: number
   fingerprint: string
   duplicate: boolean
+  repeatInJob: boolean // 重复是因为本次入库里前面已出现过同一道题：这种重复不补知识点与难度
+  knowledge: KnowledgeRef[] // 经 sanitizeMeta 规整后的页面读数，入库时原样写入
+  difficulty: number | null
+  fill: boolean // 已在库，库里那道题缺知识点或难度而这次读到了
 }
 
 export interface PreparedPage {
@@ -82,13 +88,9 @@ export async function preparePage(extracted: ExtractedPage, requestedUrl: string
   }
 
   // 编号已在库的题不下载图片；其余题的图片去重后统一下载
-  const known = new Set<string>()
   const needed = new Set<number>()
   for (const q of extracted.questions) {
-    if (q.qid && (qidExists(db, q.qid) || seen.hasQid(q.qid))) {
-      known.add(q.qid)
-      continue
-    }
+    if (q.qid && (qidExists(db, q.qid) || seen.hasQid(q.qid))) continue
     for (const index of imageRefsOf(extracted.images.length, q.stemHtml, q.answerHtml)) needed.add(index)
   }
   const downloaded = await downloadImages(extracted.images, [...needed], deps.fetchImage, { shouldStop: deps.shouldStop })
@@ -99,9 +101,17 @@ export async function preparePage(extracted: ExtractedPage, requestedUrl: string
     const stemRefs = imageRefsOf(extracted.images.length, q.stemHtml)
     const tokens = stemRefs.map((index) => images[index]?.sha ?? `url:${extracted.images[index]}`)
     const fingerprint = fingerprintOf(q.stemText, tokens)
-    const alreadyKnown = Boolean(q.qid && known.has(q.qid))
-    const duplicate = alreadyKnown || seen.has(q.qid, fingerprint) || isDuplicate(db, q.qid, fingerprint)
-    if (!duplicate) seen.add(q.qid, fingerprint)
+    const repeatInJob = Boolean(q.qid && seen.hasQid(q.qid)) || seen.has(q.qid, fingerprint)
+    const meta = sanitizeMeta({ knowledge: q.knowledge, difficulty: q.difficulty })
+    const libraryId = repeatInJob ? null : duplicateId(db, q.qid, fingerprint)
+    const duplicate = repeatInJob || libraryId !== null
+    let fill = false
+    if (libraryId !== null) {
+      const gaps = metaGaps(db, libraryId)
+      fill = (gaps.knowledge && meta.knowledge.length > 0) || (gaps.difficulty && meta.difficulty !== null)
+    }
+    // 要补齐的题也登记：同一次入库里再出现的同一道题只算重复，不再重复补
+    if (!duplicate || fill) seen.add(q.qid, fingerprint)
     return {
       tempId: `${deps.pageIndex}-${i}`,
       qid: q.qid,
@@ -115,7 +125,11 @@ export async function preparePage(extracted: ExtractedPage, requestedUrl: string
       imageRefs,
       failedImages: duplicate ? 0 : imageRefs.filter((index) => images[index] === null).length,
       fingerprint,
-      duplicate
+      duplicate,
+      repeatInJob,
+      knowledge: meta.knowledge,
+      difficulty: meta.difficulty,
+      fill
     }
   })
   return { declaredCount: extracted.declaredCount, requestedUrl, sourceUrl, sourceTitle, questions, images, imageUrls: extracted.images }
@@ -133,6 +147,8 @@ export function toPreview(page: PreparedPage, title: string): ImportPreview {
     imageTotal: used.size,
     imageFailed,
     declaredCount: page.declaredCount,
+    noKnowledge: page.questions.filter((q) => q.knowledge.length === 0).length,
+    noDifficulty: page.questions.filter((q) => q.difficulty === null).length,
     error: null,
     questions: page.questions.map((q) => {
       const chars = [...q.stemText]
@@ -144,7 +160,10 @@ export function toPreview(page: PreparedPage, title: string): ImportPreview {
         previewText: chars.length > PREVIEW_CHARS ? chars.slice(0, PREVIEW_CHARS).join('') + '…' : q.stemText || (q.stemHtml.includes('<img') ? '（仅图片）' : ''),
         hasAnswer: q.answerHtml !== null,
         duplicate: q.duplicate,
-        failedImages: q.failedImages
+        failedImages: q.failedImages,
+        knowledgeCount: q.knowledge.length,
+        difficulty: q.difficulty,
+        fill: q.fill
       }
     })
   }

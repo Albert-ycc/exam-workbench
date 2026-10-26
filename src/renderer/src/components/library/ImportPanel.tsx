@@ -21,7 +21,22 @@ function countMismatch(preview: ImportPreview): boolean {
   return !preview.error && preview.declaredCount !== null && preview.declaredCount !== preview.questions.length
 }
 
-function summarize(previews: ImportPreview[]): { total: number; withAnswer: number; duplicate: number; fresh: number; freshWithAnswer: number; imageFailed: number; failedPages: number; mismatched: number } {
+interface Summary {
+  total: number
+  withAnswer: number
+  duplicate: number
+  fresh: number
+  freshWithAnswer: number
+  imageFailed: number
+  failedPages: number
+  mismatched: number
+  noKnowledge: number // 没取到知识点的题数（含已在库的）
+  noDifficulty: number // 没取到难度的题数（含已在库的）
+  pages: number // 拆出了题的链接数
+  fill: number // 已在库、确认后会补上知识点与难度的题数
+}
+
+function summarize(previews: ImportPreview[]): Summary {
   const questions = previews.flatMap((p) => p.questions)
   const fresh = questions.filter((q) => !q.duplicate)
   return {
@@ -32,15 +47,60 @@ function summarize(previews: ImportPreview[]): { total: number; withAnswer: numb
     freshWithAnswer: fresh.filter((q) => q.hasAnswer).length,
     imageFailed: previews.reduce((sum, p) => sum + p.imageFailed, 0),
     failedPages: previews.filter((p) => p.error).length,
-    mismatched: previews.filter(countMismatch).length
+    mismatched: previews.filter(countMismatch).length,
+    noKnowledge: previews.reduce((sum, p) => sum + (p.error ? 0 : p.noKnowledge), 0),
+    noDifficulty: previews.reduce((sum, p) => sum + (p.error ? 0 : p.noDifficulty), 0),
+    pages: previews.filter((p) => !p.error && p.questions.length > 0).length,
+    fill: questions.filter((q) => q.fill).length
   }
+}
+
+// 知识点、难度读不到时的提示（L2）与已在库的题将补齐的提示（L3）。
+// 整个页面都没读到：说清后果和补救办法；只有几道没读到：说清这几道的后果，题行上标出是哪几道
+function missingNote(s: Summary, count: number, what: '知识点' | '难度'): string | null {
+  if (count === 0) return null
+  if (count < s.total) return `${count} 道没取到${what}，这几道入库后按${what}筛不到。`
+  const subject = s.pages === 1 ? `这页 ${count} 道` : `这 ${s.pages} 条链接共 ${count} 道`
+  return `${subject}都没读到${what}，入库后按${what}筛不到这些题；之后再入同一链接，读到的${what}会补上。`
+}
+
+function ClassifyNotes({ s }: { s: Summary }) {
+  const noKnowledge = missingNote(s, s.noKnowledge, '知识点')
+  const noDifficulty = missingNote(s, s.noDifficulty, '难度')
+  return (
+    <>
+      {noKnowledge && (
+        <p className="notice import-callout" role="status" data-testid="import-no-knowledge">
+          {noKnowledge}
+        </p>
+      )}
+      {noDifficulty && (
+        <p className="notice import-callout" role="status" data-testid="import-no-difficulty">
+          {noDifficulty}
+        </p>
+      )}
+      {s.fill > 0 && (
+        <p className="import-callout is-blocking" role="status" data-testid="import-fill">
+          已在库，将补齐知识点与难度 {s.fill} 道
+        </p>
+      )}
+    </>
+  )
+}
+
+// 链接标题行里的提示各占一行：并排写会把页面标题挤没，「难度」二字也会被拆到两行
+const WARN_LINE = { display: 'block' } as const
+
+// 题行上标「无知识点」「无难度」只在这个页面里有的读到、有的没读到时才标（整页都没读到时由顶部提示说明，不逐题重复）
+function partlyMissing(count: number, total: number): boolean {
+  return count > 0 && count < total
 }
 
 function SummaryLine({ previews }: { previews: ImportPreview[] }) {
   const s = summarize(previews)
   return (
     <p className="import-summary" data-testid="import-summary">
-      拆出 {s.total} 道、带答案 {s.withAnswer} 道、已在库 {s.duplicate} 道（入库时跳过）
+      拆出 {s.total} 道、带答案 {s.withAnswer} 道、已在库 {s.duplicate} 道（{s.fill > 0 ? '不重复入库' : '入库时跳过'}）
       {s.imageFailed > 0 && <span className="import-warn">，{s.imageFailed} 张图片下载失败</span>}
       {s.failedPages > 0 && <span className="import-warn">，{s.failedPages} 条链接失败</span>}
       {s.mismatched > 0 && <span className="import-warn">，{s.mismatched} 条链接的拆出题数与页面标明的不一致</span>}
@@ -114,6 +174,8 @@ function PageResult({ preview }: { preview: ImportPreview }) {
       <div className="import-item-title">{preview.title || preview.url}</div>
       <div className="import-item-meta">
         拆出 {s.total} 道，已在库 {s.duplicate} 道
+        {s.noKnowledge > 0 && <span className="import-warn">，{s.noKnowledge} 道没取到知识点</span>}
+        {s.noDifficulty > 0 && <span className="import-warn">，{s.noDifficulty} 道没取到难度</span>}
       </div>
     </li>
   )
@@ -161,8 +223,9 @@ function PreviewView() {
   const previews = progress?.previews ?? []
   const committing = stage === 'committing'
   const s = summarize(previews)
-  // S18：没有新题可入（全部已在库，或一道都没拆出来）时不能确认
-  const nothingNew = s.fresh === 0
+  // S18：没有新题可入（全部已在库，或一道都没拆出来）时不能确认；已在库的题有可补齐的知识点与难度时例外，按钮改为「补齐知识点与难度」
+  const nothingNew = s.fresh === 0 && s.fill === 0
+  const fillOnly = s.fresh === 0 && s.fill > 0
   return (
     <section className="import-panel" aria-label="入库预览">
       <header>
@@ -170,6 +233,7 @@ function PreviewView() {
       </header>
       <div className="import-body">
         <SummaryLine previews={previews} />
+        <ClassifyNotes s={s} />
         {nothingNew && (
           <p className="import-callout is-blocking" role="status" data-testid="import-nothing-new">
             {s.total === 0 ? '没有拆出题目，无法入库。' : '拆出的题都已在库，没有可入库的新题，所以不能确认入库。'}
@@ -194,6 +258,8 @@ function PreviewView() {
               ) : (
                 <span className="import-item-meta">
                   {preview.questions.length} 道，已在库 {preview.questions.filter((q) => q.duplicate).length} 道
+                  {preview.noKnowledge > 0 && <span className="import-warn" style={WARN_LINE}>{preview.noKnowledge} 道没取到知识点</span>}
+                  {preview.noDifficulty > 0 && <span className="import-warn" style={WARN_LINE}>{preview.noDifficulty} 道没取到难度</span>}
                 </span>
               )}
             </summary>
@@ -213,6 +279,9 @@ function PreviewView() {
                       {q.numberCount > 1 && <Tag tone="plain">含 {q.numberCount} 小题</Tag>}
                       <Tag tone={q.hasAnswer ? 'ok' : 'plain'}>{q.hasAnswer ? '有答案' : '无答案'}</Tag>
                       {q.duplicate && <Tag tone="warn">已在库</Tag>}
+                      {q.fill && <Tag tone="plain">将补齐</Tag>}
+                      {partlyMissing(preview.noKnowledge, preview.questions.length) && q.knowledgeCount === 0 && <Tag tone="warn">无知识点</Tag>}
+                      {partlyMissing(preview.noDifficulty, preview.questions.length) && q.difficulty === null && <Tag tone="warn">无难度</Tag>}
                       {q.failedImages > 0 && <Tag tone="warn">缺 {q.failedImages} 张图</Tag>}
                     </div>
                     <div className="import-q-text">{q.previewText}</div>
@@ -229,7 +298,7 @@ function PreviewView() {
           取消
         </Button>
         <Button variant="primary" disabled={committing || nothingNew} onClick={() => void importActions.commit()}>
-          {committing ? '正在入库' : '确认入库'}
+          {committing ? '正在入库' : fillOnly ? '补齐知识点与难度' : '确认入库'}
         </Button>
       </footer>
     </section>
@@ -239,6 +308,7 @@ function PreviewView() {
 function DoneView() {
   const { result } = useImportState()
   const added = result?.added ?? 0
+  const filled = result?.filled ?? 0
   // 去试题库只看本次入库的题：先把「本次入库」写进试题库的筛选条件，再跳转；面板同时收起，回到采集页时不留结果面板
   const goLibrary = (): void => {
     libraryFilter.showBatch(result?.addedIds ?? [])
@@ -252,9 +322,9 @@ function DoneView() {
       </header>
       <div className="import-body">
         <p className="import-done" role="status" data-testid="import-result">
-          新增 {added} 道，跳过 {result?.skipped ?? 0} 道（已在库）
+          新增 {added} 道，跳过 {result?.skipped ?? 0} 道（已在库）{filled > 0 ? `，补齐知识点与难度 ${filled} 道` : ''}
         </p>
-        {added === 0 && <p className="import-done-note">没有新增题目，试题库里的题目没有变化。</p>}
+        {added === 0 && <p className="import-done-note">{filled > 0 ? `没有新增题目，试题库里已有的 ${filled} 道题补齐了知识点与难度。` : '没有新增题目，试题库里的题目没有变化。'}</p>}
       </div>
       <footer>
         <Button onClick={importActions.dismiss}>关闭</Button>
@@ -273,5 +343,6 @@ export default function ImportPanel({ pasteOpen, onClosePaste }: Props) {
   if (stage === 'idle') return pasteOpen ? <PasteForm onClose={onClosePaste} /> : null
   if (stage === 'starting' || stage === 'running') return <RunningView />
   if (stage === 'preview' || stage === 'committing') return <PreviewView />
-  return <DoneView />
+  // 入库完成后点工具栏的「粘贴链接入库」：直接换成粘贴框，不必先关掉结果；关闭粘贴框回到结果
+  return pasteOpen ? <PasteForm onClose={onClosePaste} /> : <DoneView />
 }

@@ -104,7 +104,7 @@ check('异常的超大小题数被截到上限，不会展开出百万个题号'
 })
 
 check('加入试卷：按题型大类找大题，找不到新建；草稿上的目标满分保留', () => {
-  const q = (id: number, type: string): LibraryQuestion => ({ id, zujuanQid: null, sourcePaperId: null, sourcePaperTitle: '', sourceLabel: '', sourceOrder: 0, questionType: type, numberCount: 1, stemHtml: 'x', answerHtml: null, createdAt: '' })
+  const q = (id: number, type: string): LibraryQuestion => ({ id, zujuanQid: null, sourcePaperId: null, sourcePaperTitle: '', sourceLabel: '', sourceOrder: 0, questionType: type, numberCount: 1, stemHtml: 'x', answerHtml: null, createdAt: '', chapterId: null, knowledge: [], difficulty: null, tags: [] })
   const base = { sections: [{ id: 's1', title: '选择题', items: [item('a', { questionType: '单选题' })] }], targetScore: 100 }
   const { draft, placed } = appendQuestions(base, [q(1, '单选题'), q(2, '解答题-计算题'), q(3, '解答题-问答题')])
   assert.equal(draft.targetScore, 100)

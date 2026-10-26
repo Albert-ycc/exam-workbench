@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { assetUrl, saveAsset } from '../src/main/assets.ts'
 import { openDatabase } from '../src/main/db.ts'
+import { saveQuestionMeta } from '../src/main/library/classify.ts'
 
 const FORMULA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="20" viewBox="0 0 64 20"><text x="2" y="15" font-family="Times New Roman" font-style="italic" font-size="15">|a|=−a</text></svg>`
 // 48×24 的数轴示意图（PNG）
@@ -50,6 +51,17 @@ export function seedDataDir(dataDir: string): { questionIds: number[] } {
   const ids = rows.map(([qid, paperId, label, order, type, count, stem, answer]) =>
     Number(insert.run(qid, paperId, label, order, type, count, stem, answer, `seed-${qid}`, now).lastInsertRowid)
   )
+  // 知识点与难度：编号、名称取自 test/fixtures 里组卷网真实页面；第 6 题模拟没取到知识点与难度
+  const k = (id: number, name: string, subject = 'czsx') => ({ id, name, subject })
+  const meta = [
+    { knowledge: [k(4717, '绝对值的几何意义'), k(4718, '求一个数的绝对值')], difficulty: 0.65 },
+    { knowledge: [k(4708, '用数轴上的点表示有理数')], difficulty: 0.85 },
+    { knowledge: [k(4763, '含乘方的有理数混合运算'), k(4731, '有理数加法运算')], difficulty: 0.57 },
+    { knowledge: [k(4702, '正负数的实际应用'), k(4731, '有理数加法运算')], difficulty: 0.4 },
+    { knowledge: [k(148342, '记叙文', 'czyy'), k(148349, '细节理解', 'czyy')], difficulty: 0.81 },
+    { knowledge: [], difficulty: null }
+  ]
+  ids.forEach((id, i) => saveQuestionMeta(db, id, meta[i]))
   db.close()
   return { questionIds: ids }
 }

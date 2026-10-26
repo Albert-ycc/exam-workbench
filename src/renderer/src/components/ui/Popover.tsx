@@ -1,4 +1,4 @@
-// 浮层与菜单的共用底座：点触发元素开合、Esc 关闭并把焦点还给触发元素、点外面关闭、贴着触发元素定位并在放不下时翻转。
+// 浮层与菜单的共用底座：点触发元素开合、Esc 关闭并把焦点还给触发元素、点外面关闭、贴着触发元素定位并在放不下时翻转，内容尺寸变了重新定位。
 // 浮层挂在 body 下，带 data-ui-persist，所以在弹窗（背景 inert）里也能操作。样式见 Menu.css。
 //
 // Popover：任意内容的浮层，焦点移到浮层内第一个可聚焦元素（没有则落在浮层本身）。
@@ -96,9 +96,13 @@ export function Popover({ trigger, children, open: controlled, defaultOpen = fal
     place()
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
+    // 浮层内容变高变宽（列表变长、出现提示）也要重新定位，否则贴着窗口边时会被切掉
+    const observer = new ResizeObserver(place)
+    if (popRef.current) observer.observe(popRef.current)
     return () => {
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
+      observer.disconnect()
     }
   }, [open, placement, align, matchTriggerWidth])
 

@@ -2,7 +2,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { ImportResult } from '../../shared/library.ts'
 import { assetUrl, saveAsset } from '../assets.ts'
-import { isDuplicate } from './dedupe.ts'
+import { saveQuestionMeta } from './classify.ts'
+import { duplicateId } from './dedupe.ts'
 import type { PreparedPage } from './prepare.ts'
 
 const IMG_PENDING = /<img\b[^>]*?\bsrc="ewb-pending:(\d+)"[^>]*>/g
@@ -26,6 +27,7 @@ export function commitPages(db: DatabaseSync, dataDir: string, pages: PreparedPa
   const now = new Date().toISOString()
   let added = 0
   let skipped = 0
+  let filled = 0
   const findPaper = db.prepare('SELECT id FROM source_papers WHERE url = ?')
   const insertPaper = db.prepare('INSERT INTO source_papers (url, title, fetched_at) VALUES (?, ?, ?)')
   const insertQuestion = db.prepare(
@@ -38,16 +40,22 @@ export function commitPages(db: DatabaseSync, dataDir: string, pages: PreparedPa
       const saved = new Map<number, string>()
       let paperId: number | null = null
       for (const q of page.questions) {
-        // 预览之后库里可能又多了这道题，写入前再核对一次
-        if (q.duplicate || isDuplicate(db, q.qid, q.fingerprint)) {
+        // 预览之后库里可能又多了这道题，写入前再核对一次。
+        // 已在库的题：库里那道缺知识点或难度而这次读到了，就补上（只补缺，已有的不动）；本次入库里前面出现过的重复题不补
+        const existingId = q.repeatInJob ? null : duplicateId(db, q.qid, q.fingerprint)
+        if (q.duplicate || existingId !== null) {
           skipped++
+          if (existingId !== null) {
+            const wrote = saveQuestionMeta(db, existingId, { knowledge: q.knowledge, difficulty: q.difficulty })
+            if (wrote.knowledge || wrote.difficulty) filled++
+          }
           continue
         }
         if (paperId === null && page.sourceUrl) {
           const found = findPaper.get(page.sourceUrl) as { id: number } | undefined
           paperId = found ? found.id : Number(insertPaper.run(page.sourceUrl, page.sourceTitle || page.sourceUrl, now).lastInsertRowid)
         }
-        insertQuestion.run(
+        const questionId = Number(insertQuestion.run(
           q.qid,
           paperId,
           q.sourceLabel,
@@ -58,7 +66,8 @@ export function commitPages(db: DatabaseSync, dataDir: string, pages: PreparedPa
           q.answerHtml === null ? null : localize(q.answerHtml, page, saved, db, dataDir),
           q.fingerprint,
           now
-        )
+        ).lastInsertRowid)
+        saveQuestionMeta(db, questionId, { knowledge: q.knowledge, difficulty: q.difficulty })
         added++
       }
     }
@@ -67,5 +76,5 @@ export function commitPages(db: DatabaseSync, dataDir: string, pages: PreparedPa
     db.exec('ROLLBACK')
     throw error
   }
-  return { added, skipped }
+  return { added, skipped, filled }
 }

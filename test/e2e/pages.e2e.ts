@@ -1,14 +1,15 @@
 // 采集、试题库、试卷库、设置四个页面的端到端测试（方向 C）：
 //   试卷库  S9 搜索、摘要「N 题 · M 分」（M1 按题号）、最新版本与「有改动未存为版本」（无版本的卷只写「未存为版本」，与编辑器同词）、按修改时间排序、继续上次编辑、
-//           删除 8 秒内可撤销（先隐藏、到时才真删）、另存为新试卷
+//           删除 8 秒内可撤销（先隐藏、到时才真删，等待删除的试卷不计入左栏份数）、另存为新试卷；第三轮的分类栏、标签条、勾选框的版面（分类与标签的行为在 papers-classify.e2e.ts）
 //   试题库  S19 全库无答案只在顶部提示一次、S20 无结果写出条件并可清除、N4 短题不出「展开」、N8 关键词高亮、
 //           N11 题型带题数按常用顺序、F11 加入试卷（最近 3 份 / 选择试卷…）与「已用于 N 份试卷」、筛选条件切页面后保留
 //   设置    N6 版本号、默认下载位置（可更改并保存）、快捷键说明
 //   入库    N7 空库「去采集」、S18 入库完成后「去试题库看本次入库」、没有新题时禁用确认、带答案 0 道的黄色提示
-// 试题库、试卷库用 real-data 的复制品（41 道真实组卷网题、3 份试卷）；入库部分用本地样本页代替组卷网，不访问外网。
+// 试题库、试卷库的数据：用本地样本页（test/fixtures 的数学卷 23 题、英语卷 20 题，共 43 道）经离线拦截入库，再用接口建 3 份试卷
+// （「七年级数学英语综合测试」21 题含 15 空完形填空、「隔离A」「隔离B」）；入库部分同样用本地样本页代替组卷网，不访问外网。
 // 用法：node test/e2e/pages.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
@@ -17,15 +18,16 @@ import { numberItems, numberLabel } from '../../src/shared/numbering.ts'
 import { buildTo, ROOT } from '../../scripts/e2e/app.ts'
 import { ENGLISH_URL, installIntercept, launchOffline, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
-const REAL_DATA = '/private/tmp/claude-501/-Volumes---------------/643ecf66-a7fe-4138-a741-f9014d48e9c5/scratchpad/round2/real-data'
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-pages-'))
 mkdirSync(evidence, { recursive: true })
-assert.ok(existsSync(join(REAL_DATA, 'workbench.db')), `找不到真实数据：${REAL_DATA}`)
-buildTo('out-pages4')
+// 各套端到端各用自己的构建目录；本套用 out-pages5，不与试题库线的 library.e2e.ts（out-pages4）互相覆盖
+const OUT = 'out-pages5'
+process.env.EWB_IMPORT_GAP_MS = '300' // 入库的页间间隔缩短，测试不必干等
+buildTo(OUT)
 // 用脚本路径启动时 Electron 在 main 目录里找 package.json，找不到就报 Electron 自己的版本号；
 // 放一份与根目录一致的，设置页才读到应用的版本号（正式运行读的就是 package.json）
 const rootPackage = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { name: string; version: string }
-writeFileSync(join(ROOT, 'out-pages4/main/package.json'), JSON.stringify({ name: rootPackage.name, version: rootPackage.version, main: 'index.js' }))
+writeFileSync(join(ROOT, `${OUT}/main/package.json`), JSON.stringify({ name: rootPackage.name, version: rootPackage.version, main: 'index.js' }))
 
 let steps = 0
 const ok = (name: string): void => {
@@ -58,11 +60,11 @@ const until = async (condition: () => Promise<boolean>, timeoutMs: number): Prom
 const totalText = async (window: Page): Promise<string> => (await window.getByTestId('library-total').innerText()).trim()
 
 // ======================================================================
-// 第一部分：真实数据（试卷库、试题库、设置）
+// 第一部分：样本页入库的数据（试卷库、试题库、设置）
 // ======================================================================
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-pages-data-'))
-cpSync(REAL_DATA, dataDir, { recursive: true })
-const real = await launchOffline({ outDir: 'out-pages4', dataDir })
+const TOTAL = 43 // 数学卷 23 题 + 英语卷 20 题
+const COMPOSITE = '七年级数学英语综合测试'
+const real = await launchOffline({ outDir: OUT })
 const { app, window } = real
 
 interface Q {
@@ -77,24 +79,105 @@ interface Q {
 try {
   await resize(app, window, 1440, 900)
 
+  // ---------------------------------------------------------------- 造数据：样本页入库 + 接口建三份试卷
+  await installIntercept(app)
+  // 样本里数学卷第二题带一张答案图，这里去掉：S19 要的是「全库都没有答案」
+  await app.evaluate(() => {
+    const state = (globalThis as unknown as { __ewb: { pages: Record<string, string> } }).__ewb
+    const key = '/2p3543573.html'
+    state.pages[key] = state.pages[key].replace(/<div class="item answer"><img[^>]*><\/div>/, '<div class="item answer"></div>')
+  })
+  const seedButton = (label: string) => window.getByRole('button', { name: label, exact: true })
+  const seedPaste = async (url: string): Promise<void> => {
+    await tab(window, '采集').click()
+    const open = seedButton('粘贴链接入库')
+    if (await open.isEnabled()) await open.click()
+    await window.locator('.import-textarea').fill(url)
+    await seedButton('开始入库').click()
+  }
+  await seedPaste(PAPER_URL)
+  await window.getByTestId('import-summary').waitFor({ timeout: 120_000 })
+  assert.equal((await window.getByTestId('import-summary').innerText()).replace(/\s+/g, ''), '拆出23道、带答案0道、已在库0道（入库时跳过）')
+  await seedButton('确认入库').click()
+  await window.getByTestId('import-result').waitFor()
+  await seedButton('关闭').click() // 不点「去试题库看本次入库」：那会让试题库带着「本次入库」的筛选
+  await window.getByTestId('import-result').waitFor({ state: 'detached' })
+  await seedPaste(ENGLISH_URL) // 英语卷第一次打开是安全验证页：放行后重载
+  await window.getByTestId('import-waiting').waitFor({ timeout: 30_000 })
+  await app.evaluate(() => (globalThis as unknown as { __ewb: { verify: Set<string> } }).__ewb.verify.delete('/2p1111111.html'))
+  await window.evaluate(() => window.workbench.browser.reload())
+  await window.getByTestId('import-summary').waitFor({ timeout: 120_000 })
+  assert.equal((await window.getByTestId('import-summary').innerText()).replace(/\s+/g, ''), '拆出20道、带答案0道、已在库0道（入库时跳过）')
+  await seedButton('确认入库').click()
+  await window.getByTestId('import-result').waitFor()
+  await seedButton('关闭').click()
+
+  const questions: Q[] = await window.evaluate(() => window.workbench.library.listQuestions({ limit: 100 }).then((p) => p.items))
+  assert.equal(questions.length, TOTAL)
+  const item = (q: Q, id: string) => ({ id, originQuestionId: q.id, sourceLabel: q.sourceLabel, questionType: q.questionType, numberCount: q.numberCount, stemHtml: q.stemHtml, answerHtml: q.answerHtml })
+  const choice = questions.filter((q) => q.questionType === '单选题').slice(0, 3)
+  const cloze = questions.find((q) => q.questionType.startsWith('完形填空'))!
+  assert.equal(choice.length, 3)
+  assert.equal(cloze.numberCount, 15)
+  const firstOf = (type: RegExp): Q => questions.find((q) => type.test(q.questionType))!
+  // 综合测试卷：4 道选择（3 数学 + 1 英语）+ 1 填空 + 1 计算 + 15 空完形填空 = 7 个题块、21 个题号
+  const compositeBlocks = [
+    { id: 's1', title: '选择题', items: [...choice, firstOf(/^单项选择/)].map((q, i) => item(q, `a${i}`)) },
+    { id: 's2', title: '填空题', items: [item(firstOf(/^填空题/), 'b0')] },
+    { id: 's3', title: '解答题', items: [item(firstOf(/^解答题-计算题/), 'c0')] },
+    { id: 's4', title: '完形填空', items: [item(cloze, 'd0')] }
+  ]
+  const makePaper = (title: string, sections: unknown) =>
+    window.evaluate(
+      async ([t, secs]) => {
+        const id = await window.workbench.papers.create(t as string)
+        await window.workbench.papers.saveEdits(id, { draft: { sections: secs as never } })
+        return id
+      },
+      [title, sections] as const
+    )
+  await makePaper(COMPOSITE, compositeBlocks)
+  // 隔离A、B 用列表最末的两道数学题：试题库第一页的第一道题不被任何试卷用到（F11 要从「未用过」开始）
+  await makePaper('隔离A', [{ id: 's1', title: '解答题', items: [item(questions.at(-1)!, 'a0')] }])
+  await makePaper('隔离B', [{ id: 's1', title: '解答题', items: [item(questions.at(-2)!, 'b0')] }])
+
   // ---------------------------------------------------------------- 试卷库
   await tab(window, '试卷库').click()
   await window.getByTestId('paper-row').first().waitFor()
   const initial = await window.evaluate(() => window.workbench.papers.list())
   assert.equal(initial.length, 3)
 
-  // M1：题数按题号。真实数据的综合测试卷里有完形填空，题号排到 21，题块只有 7 个
-  const main = paperRow(window, '七年级数学英语综合测试')
+  // M1：题数按题号。综合测试卷里有完形填空，题号排到 21，题块只有 7 个
+  const main = paperRow(window, COMPOSITE)
   assert.match(await main.innerText(), /21 题/)
+  assert.equal(initial.find((p) => p.title === COMPOSITE)!.structure.questionCount, 21)
   for (const paper of initial) assert.match(await paperRow(window, paper.title).innerText(), new RegExp(`${paper.structure.questionCount} 题`))
   ok('S9 / M1：试卷库每行显示「N 题」，按题号计（综合测试卷 21 题）')
 
+  // 第三轮版面：左栏分类（全部、未分类带份数）、标签条、行勾选框与表头全选
+  const railTexts = await window.locator('.pp-rail [data-testid="category-row"]').evaluateAll((els) => els.map((el) => el.textContent!.replace(/\s+/g, '')))
+  assert.deepEqual(railTexts, ['全部3', '未分类3'], '没有分类时左栏只有「全部」「未分类」，份数 3')
+  assert.equal(await window.locator('.pp-rail').getByRole('button', { name: '新建分类', exact: true }).count(), 1)
+  assert.equal((await window.locator('.pp-tagbar').innerText()).replace(/\s+/g, ''), '标签还没有标签，在试卷的「⋯›标签…」里新建')
+  assert.equal(await window.getByTestId('paper-row').getByRole('checkbox').count(), 3, '每行一个勾选框')
+  assert.equal(await window.getByRole('checkbox', { name: '选择列表里的全部试卷' }).count(), 1, '表头一个全选框')
+  assert.equal(await window.locator('.pp-thead').innerText().then((t) => t.replace(/\s+/g, '')), '标题题数·分值最新版本修改时间操作')
+  // 标题最多两行，全名放在 title 属性里（标题按钮的悬停提示就是全名）
+  for (const paper of initial) assert.equal(await paperRow(window, paper.title).locator('.pp-title').getAttribute('title'), paper.title)
+  assert.equal(await window.locator('.pp-title').first().evaluate((el) => getComputedStyle(el).webkitLineClamp), '2')
+  // 勾选后操作条替换表头文字：表头与列表的位置不变，选中第一份时列表不被推下去
+  const geometry = async () => ({ head: await window.locator('.pp-thead').boundingBox(), list: await window.locator('.pp-list').boundingBox(), first: await window.getByTestId('paper-row').first().boundingBox() })
+  const geometryBefore = await geometry()
+  await window.getByTestId('paper-row').first().getByRole('checkbox').check()
+  await window.getByTestId('bulk-bar').waitFor()
+  assert.deepEqual(await geometry(), geometryBefore)
+  assert.equal(await window.locator('.pp-thead .pp-bulk').count(), 1)
+  assert.match(await window.getByTestId('bulk-bar').innerText(), /已选 1 份[\s\S]*移到分类[\s\S]*打标签[\s\S]*去标签[\s\S]*取消选择/)
+  await window.getByTestId('bulk-bar').getByRole('button', { name: '取消选择', exact: true }).click()
+  await window.getByTestId('bulk-bar').waitFor({ state: 'detached' })
+  ok('第三轮版面：左栏「全部 3」「未分类 3」+「新建分类」，没有标签时标签条写明从哪里新建，每行勾选框与表头全选框，表头列名不变；标题两行截断且全名在 title 里；勾选后操作条替换表头文字、列表不挪位')
+
   // 造一份有分值的试卷：选择题每小题 4 分 ×3，完形填空 15 空每小题 1 分
-  const questions: Q[] = await window.evaluate(() => window.workbench.library.listQuestions({ limit: 100 }).then((p) => p.items))
-  const choice = questions.filter((q) => q.questionType === '单选题').slice(0, 3)
-  const cloze = questions.find((q) => q.questionType.startsWith('完形填空'))!
-  assert.equal(choice.length, 3)
-  const item = (q: Q, id: string) => ({ id, originQuestionId: q.id, sourceLabel: q.sourceLabel, questionType: q.questionType, numberCount: q.numberCount, stemHtml: q.stemHtml, answerHtml: q.answerHtml })
   const scored = await window.evaluate(
     async ([choiceItems, clozeItem]) => {
       const id = await window.workbench.papers.create('分值测试卷')
@@ -169,7 +252,7 @@ try {
   await window.getByTestId('paper-row').first().waitFor()
   ok('S9：「继续上次编辑」打开最近修改的试卷；编辑器顶栏的状态词与试卷库一致')
 
-  // 键盘：每行只有「打开」与「更多操作」两个 Tab 停靠点，标题按钮只服务鼠标；鼠标点标题照样能打开
+  // 键盘：每行除勾选框外只有「打开」与「更多操作」两个按钮停靠点，标题按钮只服务鼠标；鼠标点标题照样能打开
   const stops = await window.getByTestId('paper-row').evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll('button')].filter((b) => b.tabIndex >= 0).map((b) => b.textContent?.trim() || b.getAttribute('aria-label'))))
   for (const row of stops) assert.equal(row.length, 2, `每行 Tab 停靠点：${row.join('|')}`)
   assert.equal(await window.locator('.pp-title').evaluateAll((els) => els.every((el) => el.getAttribute('tabindex') === '-1')), true)
@@ -178,20 +261,20 @@ try {
   assert.equal(await window.getByLabel('试卷标题').inputValue(), '隔离A')
   await goTo(window, 'papers', null)
   await window.getByTestId('paper-row').first().waitFor()
-  ok('S10：试卷库每行只有「打开」「更多操作」两个 Tab 停靠点，点标题仍能打开')
+  ok('S10：试卷库每行除勾选框外只有「打开」「更多操作」两个按钮停靠点，点标题仍能打开')
 
   // 另存为新试卷
-  await rowMenu(window, '七年级数学英语综合测试', '另存为新试卷')
-  await paperRow(window, '七年级数学英语综合测试（副本）').waitFor()
+  await rowMenu(window, COMPOSITE, '另存为新试卷')
+  await paperRow(window, `${COMPOSITE}（副本）`).waitFor()
   const dupToast = window.getByTestId('toast').filter({ hasText: '已另存为新试卷' })
   await dupToast.waitFor()
   const dupList = await window.evaluate(() => window.workbench.papers.list())
-  const copy = dupList.find((p) => p.title === '七年级数学英语综合测试（副本）')!
+  const copy = dupList.find((p) => p.title === `${COMPOSITE}（副本）`)!
   assert.equal(copy.structure.questionCount, 21)
   assert.equal(copy.latestVersionNo, null)
   await dupToast.getByRole('button', { name: '打开', exact: true }).click()
   await window.getByLabel('试卷标题').waitFor()
-  assert.equal(await window.getByLabel('试卷标题').inputValue(), '七年级数学英语综合测试（副本）')
+  assert.equal(await window.getByLabel('试卷标题').inputValue(), `${COMPOSITE}（副本）`)
   await goTo(window, 'papers', null)
   await window.getByTestId('paper-row').first().waitFor()
   ok('S9 / F10：每行菜单「另存为新试卷」复制出带 21 题的副本（无版本），提示条里的「打开」进入副本')
@@ -199,6 +282,10 @@ try {
   // 删除：8 秒内可撤销，先隐藏、到时才真删
   await rowMenu(window, '分值测试卷（改）', '删除')
   await paperRow(window, '分值测试卷（改）').waitFor({ state: 'detached' })
+  // 等待删除的试卷不计入左栏份数
+  const liveCount = (await window.evaluate(() => window.workbench.papers.list())).length - 1
+  assert.equal(await window.locator('.pp-rail [data-testid="category-row"]').first().locator('em').innerText(), String(liveCount), '倒计时内左栏「全部」不再计这份')
+  assert.equal(await window.locator('.pp-count').innerText(), `共 ${liveCount} 份`)
   const undoToast = window.getByTestId('toast').filter({ hasText: '已删除「分值测试卷（改）」' })
   await undoToast.waitFor()
   assert.ok((await window.evaluate(() => window.workbench.papers.list())).some((p) => p.title === '分值测试卷（改）'), '倒计时内试卷还在库里')
@@ -232,17 +319,17 @@ try {
   await tab(window, '试题库').click()
   await window.getByTestId('question-card').first().waitFor()
   const facets = await window.evaluate(() => window.workbench.library.facets({}))
-  assert.equal(facets.total, 41)
+  assert.equal(facets.total, TOTAL)
   assert.equal(facets.withAnswer, 0)
-  assert.equal(await totalText(window), '共 41 道题')
+  assert.equal(await totalText(window), '共 43 道题')
 
   // S19：全库都没有答案，只在顶部提示一次，卡片上不逐个标「无答案」
   assert.equal(await window.getByTestId('no-answer-notice').count(), 1)
   assert.equal(await window.locator('.lb-row .ui-tag', { hasText: '无答案' }).count(), 0)
   assert.equal(await window.locator('.lb-row .ui-tag', { hasText: '有答案' }).count(), 0)
-  assert.equal((await window.getByTestId('no-answer-notice').innerText()).replace(/\s+/g, ''), '全库41道题都还没有答案。教师版要带答案，可在试卷里给题目「添加答案」。知道了')
+  assert.equal((await window.getByTestId('no-answer-notice').innerText()).replace(/\s+/g, ''), '全库43道题都还没有答案。教师版要带答案，可在试卷里给题目「添加答案」。知道了')
   assert.ok(await window.getByTestId('no-answer-notice').evaluate((el) => el.classList.contains('notice')), '提示条用全局 .notice 琥珀样式')
-  ok('S19：全库 41 道题都没有答案 → 顶部提示一次（教师版要带答案，可在试卷里「添加答案」），卡片上没有「无答案」标记')
+  ok('S19：全库 43 道题都没有答案 → 顶部提示一次（教师版要带答案，可在试卷里「添加答案」），卡片上没有「无答案」标记')
 
   // 红笔只标改动：平时每行的「删除」是中性的灰框按钮，不是红字红图标；点了之后才红
   const delButton = window.getByTestId('question-card').first().getByRole('button', { name: '删除', exact: true })
@@ -262,33 +349,35 @@ try {
   const groups = new Map<string, number>()
   for (const t of facets.types) groups.set(primaryQuestionType(t.type), (groups.get(primaryQuestionType(t.type)) ?? 0) + t.count)
   const expected = [...groups.entries()].map(([name, count]) => ({ name, count })).sort(compareTypeNames)
-  const shownTypes = await window.locator('.lb-types > li > button').evaluateAll((els) => els.map((el) => [el.querySelector('span')!.textContent!, el.querySelector('em')!.textContent!]))
-  assert.deepEqual(shownTypes, [['全部题型', '41'], ...expected.map((g) => [g.name, String(g.count)])])
+  // 题型多于 8 个时默认收起，展开后再核对全部
+  if (expected.length > 8) await window.locator('.lb-types-foot').getByRole('button').click()
+  const shownTypes =await window.locator('.lb-types > li > button').evaluateAll((els) => els.map((el) => [el.querySelector('span')!.textContent!, el.querySelector('em')!.textContent!]))
+  assert.deepEqual(shownTypes, [['全部题型', String(TOTAL)], ...expected.map((g) => [g.name, String(g.count)])])
   const names = shownTypes.map((t) => t[0])
   for (const [a, b] of [['单选题', '填空题'], ['填空题', '阅读理解'], ['阅读理解', '解答题'], ['解答题', '书面表达']] as const) assert.ok(names.indexOf(a) < names.indexOf(b), `${a} 应排在 ${b} 前面`)
   ok(`N11：题型按钮带题数并按常用顺序排：${names.slice(1, 6).join('、')}…`)
 
   // 题型筛选：大类含子类，子类展开
   await window.locator('.lb-types').getByRole('button', { name: /^解答题\s*8$/ }).click()
-  await window.getByText('筛出 8 道，全库 41 道').waitFor()
+  await window.getByText('筛出 8 道，全库 43 道').waitFor()
   assert.ok(await window.locator('.lb-chip', { hasText: '题型：解答题' }).isVisible())
   await window.locator('.lb-sub').getByRole('button', { name: /^计算题\s*2$/ }).click()
-  await window.getByText('筛出 2 道，全库 41 道').waitFor()
+  await window.getByText('筛出 2 道，全库 43 道').waitFor()
   await window.getByRole('button', { name: '清除筛选：题型：解答题-计算题' }).click()
-  await window.getByText('共 41 道题').waitFor()
+  await window.getByText('共 43 道题').waitFor()
   ok('题型筛选：解答题 8 道、其中计算题 2 道；点 chip 的 × 清除')
 
   // N8：关键词命中高亮
   await window.getByPlaceholder('题干中的文字').fill('数轴')
   const kw = await window.evaluate(() => window.workbench.library.listQuestions({ keyword: '数轴', limit: 100 }))
   assert.ok(kw.total > 0)
-  await window.getByText(`筛出 ${kw.total} 道，全库 41 道`).waitFor()
+  await window.getByText(`筛出 ${kw.total} 道，全库 43 道`).waitFor()
   await window.locator('.lb-stem mark').first().waitFor()
   const marks = await window.locator('.lb-stem mark').allInnerTexts()
   assert.ok(marks.every((m) => m === '数轴'), `高亮的都是命中词：${marks.join('|')}`)
   await shot(window, 'library-keyword-highlight-1440')
   await window.getByPlaceholder('题干中的文字').fill('')
-  await window.getByText('共 41 道题').waitFor()
+  await window.getByText('共 43 道题').waitFor()
   assert.equal(await window.locator('.lb-stem mark').count(), 0)
   ok(`N8：关键词「数轴」命中 ${kw.total} 道，命中词高亮 ${marks.length} 处，清空后高亮消失`)
 
@@ -302,34 +391,34 @@ try {
   assert.match(emptyText, /关键词「zzqq不存在」/)
   await shot(window, 'library-empty-result-1440')
   await window.locator('.lb-empty').getByRole('button', { name: '清除筛选', exact: true }).click()
-  await window.getByText('共 41 道题').waitFor()
+  await window.getByText('共 43 道题').waitFor()
   assert.equal(await window.getByPlaceholder('题干中的文字').inputValue(), '')
-  ok('S20：无结果时写出「题型「解答题」，关键词「zzqq不存在」」，一键清除后回到全部 41 道、关键词框同步清空')
+  ok('S20：无结果时写出「题型「解答题」，关键词「zzqq不存在」」，一键清除后回到全部 43 道、关键词框同步清空')
 
   // 筛选条件切页面后保留
-  await window.locator('.lb-types').getByRole('button', { name: /^单选题\s*8$/ }).click()
-  await window.getByText('筛出 8 道，全库 41 道').waitFor()
+  await window.locator('.lb-types').getByRole('button', { name: /^单选题\s*10$/ }).click()
+  await window.getByText('筛出 10 道，全库 43 道').waitFor()
   await tab(window, '设置').click()
   await tab(window, '试题库').click()
-  await window.getByText('筛出 8 道，全库 41 道').waitFor()
-  assert.equal(await window.locator('.lb-types').getByRole('button', { name: /^单选题\s*8$/ }).getAttribute('aria-pressed'), 'true')
+  await window.getByText('筛出 10 道，全库 43 道').waitFor()
+  assert.equal(await window.locator('.lb-types').getByRole('button', { name: /^单选题\s*10$/ }).getAttribute('aria-pressed'), 'true')
   ok('筛选条件放在页面外：切到设置再回来，「单选题」仍选中')
 
   // N4：短题不出「展开」，长题出
   await window.locator('.lb-types').getByRole('button', { name: /^单项选择\s*10$/ }).click()
-  await window.getByText('筛出 10 道，全库 41 道').waitFor()
+  await window.getByText('筛出 10 道，全库 43 道').waitFor()
   await window.waitForTimeout(500)
   const rows = window.getByTestId('question-card')
   assert.equal(await rows.count(), 10)
   assert.equal(await rows.nth(1).getByRole('button', { name: '展开全部题干' }).count(), 0, '两行的短题不显示「展开」')
   await window.locator('.lb-types').getByRole('button', { name: /^阅读理解\s*4$/ }).click()
-  await window.getByText('筛出 4 道，全库 41 道').waitFor()
+  await window.getByText('筛出 4 道，全库 43 道').waitFor()
   await window.waitForTimeout(500)
   assert.ok((await window.getByRole('button', { name: '展开全部题干' }).count()) >= 1, '长题有「展开」')
   ok('N4：单项选择里的短题没有「展开全部题干」，阅读理解的长题有')
 
-  await window.locator('.lb-types').getByRole('button', { name: /^全部题型\s*41$/ }).click()
-  await window.getByText('共 41 道题').waitFor()
+  await window.locator('.lb-types').getByRole('button', { name: /^全部题型\s*43$/ }).click()
+  await window.getByText('共 43 道题').waitFor()
   await window.waitForTimeout(300)
 
   // 删除原题确认文案
@@ -338,7 +427,7 @@ try {
   assert.match(await first.innerText(), /删除这道原题？/)
   assert.match(await first.innerText(), /试卷副本不受影响/)
   await first.getByRole('button', { name: '取消', exact: true }).click()
-  assert.equal((await window.evaluate(() => window.workbench.library.listQuestions({ limit: 1 }))).total, 41)
+  assert.equal((await window.evaluate(() => window.workbench.library.listQuestions({ limit: 1 }))).total, TOTAL)
   ok('删除原题：整行变红底确认，写明「试卷副本不受影响」，取消后题目仍在')
 
   // F11：加入试卷 ▾（最近 3 份 + 选择试卷…）与「已用于 N 份试卷」
@@ -530,7 +619,7 @@ try {
 // ======================================================================
 // 第二部分：空库与入库（本地样本页代替组卷网）
 // ======================================================================
-const flow = await launchOffline({ outDir: 'out-pages4' })
+const flow = await launchOffline({ outDir: OUT })
 try {
   const { app, window } = flow
   await installIntercept(app)

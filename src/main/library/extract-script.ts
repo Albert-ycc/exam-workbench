@@ -3,6 +3,12 @@
 // 因此函数必须自包含：不能引用本文件以外的任何标识符，也不能修改页面 DOM（只读克隆出来的节点）。
 // 规则集中在这一个函数里：组卷网改版时只改这里，入库预览里的「拆出题数」会暴露失效。
 
+export interface ExtractedKnowledge {
+  id: number // 组卷网知识点编号
+  name: string
+  subject: string // 学科代码（知识点链接 /czsx/zsd4740 的第一段），读不到为空串
+}
+
 export interface ExtractedQuestion {
   qid: string | null // 组卷网题目编号
   questionType: string // 题型标签，如「单选题」「解答题-计算题」
@@ -14,6 +20,9 @@ export interface ExtractedQuestion {
   stemText: string
   answerHtml: string | null
   start: number | null // 页面上这道题的起始题号（对账用，不入库）
+  knowledge: ExtractedKnowledge[] // 页面顺序；读不到为空数组
+  difficulty: number | null // 难度系数；读不到为 null
+  difficultyLabel: string // 试卷页上的档位文字（「适中」），单题页没有；只用于测试与诊断，不入库
 }
 
 export interface ExtractedPage {
@@ -127,6 +136,43 @@ export function extractInPage(options?: { probeOnly?: boolean }): ExtractedPage 
   function positiveInt(value: string | null): number | null {
     const n = parseInt(value || '', 10)
     return Number.isFinite(n) && n > 0 ? n : null
+  }
+
+  // ---------- 知识点与难度（只读页面，读不到不报错，由入库预览提示） ----------
+  // 知识点：a.knowledge-name，编号在 cid（链接 zsd 后的数字作后备），名称在 cname，学科是链接路径的第一段
+  function readKnowledge(links: Element[]): { id: number; name: string; subject: string }[] {
+    const result: { id: number; name: string; subject: string }[] = []
+    const seenIds = new Set<number>()
+    for (const link of links) {
+      const href = link.getAttribute('href') || ''
+      const fromHref = /^(?:https?:\/\/[^/]+)?\/([a-z]{2,8})\/zsd(\d+)(?![\d])/.exec(href)
+      const cid = /^\d{1,12}$/.test((link.getAttribute('cid') || '').trim()) ? Number((link.getAttribute('cid') || '').trim()) : null
+      const id = cid ?? (fromHref ? Number(fromHref[2]) : null)
+      const name = collapse(link.getAttribute('cname') || '') || textOf(link)
+      if (id === null || id <= 0 || !name || seenIds.has(id)) continue
+      seenIds.add(id)
+      result.push({ id, name, subject: fromHref ? fromHref[1] : '' })
+    }
+    return result
+  }
+  // 难度系数：0–1 的小数，范围外当没读到
+  function parseCoefficient(raw: string): number | null {
+    if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?|\.\d+)$/.test(raw.trim())) return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : null
+  }
+  // 试卷页：「适中 (0.65)」「困难(0.4)」，档位与系数一起读；类型那一格（第一个 addi-info）不看
+  function readPaperDifficulty(item: Element): { coefficient: number | null; label: string } {
+    const cells = Array.from(item.querySelectorAll('.addi-info .info-cnt')).filter((el) => el.closest('.tk-quest-item') === item)
+    for (const cell of cells.slice(1)) {
+      const m = /^(\S*?)\s*[（(]\s*([^()（）\s]+)\s*[)）]$/.exec(textOf(cell))
+      const coefficient = m ? parseCoefficient(m[2]) : null
+      if (m && coefficient !== null) return { coefficient, label: m[1] }
+    }
+    // 后备：加入试题篮按钮上的档位与系数属性
+    const adder = item.querySelector('a.addques[qdvalue]')
+    const coefficient = adder ? parseCoefficient(adder.getAttribute('qdvalue') || '') : null
+    return { coefficient, label: coefficient !== null && adder ? collapse(adder.getAttribute('qdname') || '') : '' }
   }
 
   function sanitizeInto(src: Node, dst: Node): void {
@@ -408,6 +454,9 @@ export function extractInPage(options?: { probeOnly?: boolean }): ExtractedPage 
     type: string
     sourceLabel: string
     sectionTitle: string
+    knowledge: { id: number; name: string; subject: string }[]
+    difficulty: number | null
+    difficultyLabel: string
   }
   const sources: Source[] = []
   let pageTitle = ''
@@ -429,13 +478,18 @@ export function extractInPage(options?: { probeOnly?: boolean }): ExtractedPage 
       }
       const addi = item.querySelector('.ques-additional .addi-info')
       const adder = item.querySelector('a.addques[qyname]')
+      const difficulty = readPaperDifficulty(item)
       sources.push({
         qid: item.getAttribute('questionid'),
         stem: item.querySelector('.exam-item__cnt') || item,
         answer: item.querySelector('.exam-item__opt .item.answer'),
         type: textOf(addi) || (adder ? adder.getAttribute('qyname') || '' : ''),
         sourceLabel: textOf(item.querySelector('.ques-src')),
-        sectionTitle: section
+        sectionTitle: section,
+        // 知识点挂在整个题块上（完形填空等多小题块也只有这一份）
+        knowledge: readKnowledge(Array.from(item.querySelectorAll('a.knowledge-name')).filter((a) => a.closest('.tk-quest-item') === item)),
+        difficulty: difficulty.coefficient,
+        difficultyLabel: difficulty.label
       })
     })
   } else if (detailRoot) {
@@ -462,13 +516,23 @@ export function extractInPage(options?: { probeOnly?: boolean }): ExtractedPage 
       copy.querySelectorAll('.knowledges, .need-login').forEach((el) => el.remove())
       if (collapse(copy.textContent || '') || copy.querySelector('img')) answer = copy
     }
+    // 知识点在答案区的 .knowledges 里（先于上面的克隆读，答案里不混知识点）；页面下方的相似题推荐不读
+    const notRecommended = (el: Element): boolean => !el.closest('.rec-tests')
+    let knowledgeLinks = Array.from(doc.querySelectorAll('.test-detail-page .answer-box a.knowledge-name')).filter(notRecommended)
+    if (knowledgeLinks.length === 0) knowledgeLinks = Array.from(detailRoot.querySelectorAll('a.knowledge-name')).filter(notRecommended)
+    const difficultyItem = infoItems.find((t) => /^难度[：:]/.test(t))
+    const adder = detailRoot.querySelector('a.addques[qdvalue]')
+    const difficulty = parseCoefficient(difficultyItem ? difficultyItem.replace(/^难度[：:]\s*/, '') : '') ?? (adder ? parseCoefficient(adder.getAttribute('qdvalue') || '') : null)
     sources.push({
       qid: detailRoot.getAttribute('questionid') || (idItem ? idItem.replace(/^题号[：:]\s*/, '') : null),
       stem: detailRoot.querySelector('.quest-cnt') || detailRoot,
       answer,
       type: typeItem ? typeItem.replace(/^题型[：:]\s*/, '') : '',
       sourceLabel: textOf(srcItem),
-      sectionTitle: ''
+      sectionTitle: '',
+      knowledge: readKnowledge(knowledgeLinks),
+      difficulty,
+      difficultyLabel: ''
     })
   }
 
@@ -512,7 +576,10 @@ export function extractInPage(options?: { probeOnly?: boolean }): ExtractedPage 
       stemHtml: stem.html,
       stemText: stem.text,
       answerHtml,
-      start
+      start,
+      knowledge: entry.source.knowledge,
+      difficulty: entry.source.difficulty,
+      difficultyLabel: entry.source.difficultyLabel
     }
   })
 

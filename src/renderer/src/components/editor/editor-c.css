@@ -83,6 +83,162 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
 }
+/* 关键词与「更多筛选」同一行 */
+.ed-lib-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ed-lib-kw {
+  flex: 1;
+  min-width: 0;
+}
+.ed-more-btn {
+  flex: 0 0 auto;
+  padding: 0 10px 0 12px;
+}
+/* 有条件生效：与按下态同款的蓝黑，数字用宋体 */
+.ed-more-btn.is-active {
+  border-color: var(--bb);
+  background: var(--bb-bg);
+  color: var(--bb);
+}
+.ed-more-n {
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: var(--radius);
+  background: var(--bb);
+  color: #fff;
+  font: normal 13px/18px var(--song);
+  text-align: center;
+}
+/* 弹层外的生效条件：发丝线小块，中性样式，×去掉这一项；最多两行，再多在里面滚，「清除全部」在滚动区外 */
+.ed-lib-active {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.ed-lib-conds {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+  max-height: 56px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.ed-lib-cond {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 2px 0 7px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+.ed-lib-cond-kind {
+  flex: 0 0 auto;
+  color: var(--mute);
+}
+.ed-lib-cond-name {
+  min-width: 0;
+  max-width: 240px; /* 「章名 › 节名」要尽量写全；再长的在悬停提示里看 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ed-lib-cond-x {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--mute);
+}
+.ed-lib-cond-x:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--ink);
+}
+.ed-lib-active > .ui-btn--link {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 2px;
+  font-size: 12.5px;
+}
+
+/* 「更多筛选」弹层：宽 348px，头与脚固定，四块在中间滚动；最高到窗口底边（高度由脚本按触发按钮位置给） */
+.ed-more {
+  display: flex;
+  flex-direction: column;
+  width: 348px;
+  max-width: calc(100vw - 16px);
+}
+.ed-more-head,
+.ed-more-foot {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+}
+.ed-more-head {
+  border-bottom: 1px solid var(--ink);
+}
+.ed-more-head h3 {
+  margin: 0;
+  font: 700 15px var(--song);
+  letter-spacing: 1px;
+}
+.ed-more-foot {
+  border-top: 1px solid var(--rule);
+  background: var(--tint);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.ed-more-foot [data-testid='more-total'] {
+  color: var(--ink);
+}
+.ed-more-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 12px 12px 14px 14px;
+  overflow: auto;
+}
+.ed-more-wait,
+.ed-more-error {
+  margin: 0;
+  color: var(--mute);
+  font-size: 13px;
+}
+.ed-more-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  color: var(--red);
+}
 .ed-lib-count {
   display: flex;
   align-items: center;

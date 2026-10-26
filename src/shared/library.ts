@@ -1,4 +1,5 @@
 // 试题库与入库接口
+import type { Chapter, DifficultyKey, KnowledgeRef, Tag, TagChange, TagRenameResult } from './classify'
 import type { LibraryQuestion, SourcePaper } from './domain'
 
 export interface QuestionFilter {
@@ -8,15 +9,27 @@ export interface QuestionFilter {
   keyword?: string
   // 只取这些题：「本次入库」筛选用
   ids?: number[]
+  // 归类条件：同一项内多选取并集，不同项之间取交集；空数组等于不设
+  chapterIds?: number[] // 选章包含其下各节；NO_CHAPTER（0）为「未归章节」
+  knowledgeIds?: number[]
+  difficulties?: DifficultyKey[]
+  tagIds?: number[]
   limit?: number
   offset?: number
 }
 
-// 题型分布用的筛选条件：题型本身不参与（各题型的题数要在其他条件不变时一起列出来）
-export type FacetFilter = Pick<QuestionFilter, 'sourcePaperId' | 'keyword' | 'ids'>
+// 题数统计用的筛选条件：每一项的题数按其他条件计算、本项不参与
+export type FacetFilter = Omit<QuestionFilter, 'limit' | 'offset'>
+
+// 批量操作的对象：勾选的题，或「全选筛出的 N 道」时的筛选条件（由主进程按条件取题，不受分页影响）
+export type QuestionTarget = { ids: number[] } | { filter: FacetFilter }
 
 export interface TypeCount {
   type: string // 题型标签原文，如「解答题」「解答题-计算题」
+  count: number
+}
+
+export interface KnowledgeCount extends KnowledgeRef {
   count: number
 }
 
@@ -24,6 +37,11 @@ export interface LibraryFacets {
   total: number // 全库题数（不受筛选影响）
   withAnswer: number // 全库有答案的题数；为 0 时界面只在顶部提示一次，卡片不逐个标「无答案」
   types: TypeCount[] // 在 FacetFilter 条件下，各题型标签的题数（没有题型的题 type 为空串）
+  // 以下各项同样按「其他条件」计算；题数为 0 的不列，当前选中的除外（以 0 列出，筛选栏里要看得到自己选了什么）
+  chapters: { id: number; count: number }[] // 章包含其下各节；id 为 NO_CHAPTER 的是「未归章节」
+  knowledge: KnowledgeCount[] // 题多的在前
+  difficulties: { key: DifficultyKey; count: number }[] // 按 DIFFICULTY_TIERS 的顺序
+  tags: { id: number; count: number }[]
 }
 
 export interface QuestionPage {
@@ -40,6 +58,9 @@ export interface ImportPreviewQuestion {
   hasAnswer: boolean
   duplicate: boolean // 试题库里已有同一道题（或本次入库里已出现），确认入库时跳过
   failedImages: number // 本题下载失败的图片数
+  knowledgeCount: number // 本题读到的知识点数
+  difficulty: number | null // 本题读到的难度系数
+  fill: boolean // 已在库、库里那道题缺知识点或难度而这次读到了，确认入库时补上（L3）
 }
 
 export interface ImportPreview {
@@ -49,6 +70,8 @@ export interface ImportPreview {
   imageTotal: number // 需要保存的图片数（已在库的题不下载）
   imageFailed: number
   declaredCount: number | null // 页面自己标明的题数；与 questions.length 不一致说明页面结构可能变了
+  noKnowledge: number // 本页没取到知识点的题数（含已在库的题）；组卷网改版导致读不到时这里会接近总题数（L2）
+  noDifficulty: number // 本页没取到难度的题数（含已在库的题），用途同上
   error: string | null // 本条链接失败的原因
 }
 
@@ -65,6 +88,7 @@ export interface ImportProgress {
 export interface ImportResult {
   added: number
   skipped: number
+  filled: number // 已在库的题补上了知识点或难度的题数
 }
 
 // 界面拿到的入库结果：带上本次新增的题号，「去试题库看本次入库」据此筛选
@@ -86,6 +110,24 @@ export interface LibraryApi {
   facets(filter: FacetFilter): Promise<LibraryFacets>
   // 每道题被多少份试卷的草稿用到（草稿里 originQuestionId 等于该题）；没有用到的题不出现在结果里
   questionUsage(ids: number[]): Promise<Record<number, number>>
+  // 按条件取全部题号（「全选筛出的 N 道」的计数与勾选用），按列表顺序
+  listQuestionIds(filter: FacetFilter): Promise<number[]>
+
+  // 章节：两级目录。名称按 normalizeClassName(…, CLASS_NAME_MAX) 规整，同级重名报错；删除章连同其下各节，题回到「未归章节」
+  listChapters(): Promise<Chapter[]> // 章在前、节紧跟其章，各按 position
+  createChapter(name: string, parentId?: number | null): Promise<Chapter>
+  renameChapter(id: number, name: string): Promise<void>
+  moveChapter(id: number, toIndex: number): Promise<void> // 同级内调顺序
+  deleteChapter(id: number): Promise<{ questions: number }> // 返回回到「未归章节」的题数
+  // 归到章节：chapterId 为 null 时移出章节；一题只属于一个章节，再归一次即移动。返回涉及的题数
+  assignChapter(target: QuestionTarget, chapterId: number | null): Promise<number>
+
+  // 题目标签：名称按 normalizeClassName(…, TAG_NAME_MAX) 规整，同名（不分英文大小写）视为同一个
+  listTags(): Promise<Tag[]> // 按名称排序
+  createTag(name: string): Promise<Tag> // 已有同名标签时返回那一个
+  renameTag(id: number, name: string): Promise<TagRenameResult>
+  deleteTag(id: number): Promise<void>
+  changeQuestionTags(target: QuestionTarget, change: TagChange): Promise<number> // 返回涉及的题数
 }
 
 export const LIBRARY_IPC = {
@@ -100,7 +142,19 @@ export const LIBRARY_IPC = {
   commitImport: 'library:commit-import',
   cancelImport: 'library:cancel-import',
   facets: 'library:facets',
-  questionUsage: 'library:question-usage'
+  questionUsage: 'library:question-usage',
+  listQuestionIds: 'library:list-question-ids',
+  listChapters: 'library:list-chapters',
+  createChapter: 'library:create-chapter',
+  renameChapter: 'library:rename-chapter',
+  moveChapter: 'library:move-chapter',
+  deleteChapter: 'library:delete-chapter',
+  assignChapter: 'library:assign-chapter',
+  listTags: 'library:list-tags',
+  createTag: 'library:create-tag',
+  renameTag: 'library:rename-tag',
+  deleteTag: 'library:delete-tag',
+  changeQuestionTags: 'library:change-question-tags'
 } as const
 
 // ---------- 组卷网链接规则（主进程校验与界面按钮可用性共用） ----------

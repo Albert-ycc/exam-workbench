@@ -1,11 +1,19 @@
 /* 试卷库：与试题库同一套语言——白底表格、黑色粗细线收边、发丝线分行 */
 .pp-page {
-  display: flex;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr); /* 行高跟页面走：分类栏很长时在栏内滚动，不把整页撑高 */
   flex: 1;
-  flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--paper);
+}
+
+.pp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .pp-head {
@@ -42,8 +50,40 @@
 
 .pp-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 170px 150px 128px;
+  grid-template-columns: 20px minmax(0, 1fr) 140px 170px 140px 124px;
   column-gap: 20px;
+}
+
+/* 窄窗口（最小 1000）：分类栏与各列收窄，标题列仍有两百多像素 */
+/* 矮窗口（最小 640 高）：页头收紧，给列表多留几行 */
+@media (max-height: 720px) {
+  .pp-head {
+    min-height: 52px;
+    padding: 8px 24px;
+  }
+  .pp-tagbar {
+    padding-bottom: 8px;
+  }
+  .pp-row {
+    min-height: 52px;
+    padding: 6px 24px;
+  }
+  .pp-meta {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 1180px) {
+  .pp-page {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .pp-grid {
+    grid-template-columns: 20px minmax(0, 1fr) 104px 124px 118px 96px;
+    column-gap: 12px;
+  }
+  .pp-search {
+    width: 200px;
+  }
 }
 
 .pp-thead {
@@ -70,8 +110,8 @@
 
 .pp-row {
   align-items: center;
-  min-height: 62px;
-  padding: 10px 24px;
+  min-height: 58px;
+  padding: 8px 24px;
   border-bottom: 1px solid var(--rule);
 }
 
@@ -80,20 +120,35 @@
   box-shadow: inset 3px 0 0 var(--bb);
 }
 
+/* 勾选的行：浅蓝底（选中色），不用红 */
+.pp-row.is-selected,
+.pp-row.is-selected:hover {
+  background: var(--bb-bg);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+
+.pp-check {
+  display: flex;
+  align-items: center;
+}
+
 .pp-title-cell {
   min-width: 0;
 }
 
 .pp-title {
-  display: block;
+  display: -webkit-box;
   max-width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--ink);
-  font: 700 16px/1.45 var(--song);
+  font: 700 16px/1.4 var(--song);
   text-align: left;
   overflow-wrap: anywhere;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* 标题最多两行，全名在 title 属性里 */
 }
 
 .pp-title:hover:not(:disabled) {
@@ -158,4 +213,10 @@
   gap: 6px;
   font-size: 13px;
   color: var(--ink-2);
+}
+
+.pp-hint {
+  margin: 10px 0 0;
+  color: var(--mute);
+  font-size: 13px;
 }

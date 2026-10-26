@@ -217,7 +217,7 @@ export class ImportService {
       if (extracted.diagnostics.length) console.warn('[import] 拆题提示', label, extracted.diagnostics)
     } catch (error) {
       if (error instanceof CancelledError) throw error
-      preview = { url: label, title: '', questions: [], imageTotal: 0, imageFailed: 0, declaredCount: null, error: error instanceof Error ? error.message : String(error) }
+      preview = { url: label, title: '', questions: [], imageTotal: 0, imageFailed: 0, declaredCount: null, noKnowledge: 0, noDifficulty: 0, error: error instanceof Error ? error.message : String(error) }
     }
     job.progress.previews.push(preview)
     job.progress.done++

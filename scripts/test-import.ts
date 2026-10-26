@@ -3,19 +3,21 @@
 // 去重、图片下载、入库提交、试题库查询用临时数据库与假的下载函数。
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright'
 import { assetNameFromUrl } from '../src/main/assets.ts'
 import { openDatabase } from '../src/main/db.ts'
+import { saveQuestionMeta } from '../src/main/library/classify.ts'
 import { commitPages } from '../src/main/library/commit.ts'
 import { SeenQuestions } from '../src/main/library/dedupe.ts'
 import { extractScript, type ExtractedPage } from '../src/main/library/extract-script.ts'
 import { MAX_IMAGE_BYTES, downloadImage, sniffImageExt, type ImageFetcher } from '../src/main/library/images.ts'
 import { preparePage, toPreview } from '../src/main/library/prepare.ts'
 import { deleteQuestion, listQuestionTypes, listQuestions, listSourcePapers } from '../src/main/library/queries.ts'
+import { DIFFICULTY_TIERS, difficultyTier } from '../src/shared/classify.ts'
 import { classifyZujuanUrl, normalizeImportUrl, primaryQuestionType, splitPastedLinks } from '../src/shared/library.ts'
 
 const ROOT = resolve(import.meta.dirname, '..')
@@ -73,6 +75,27 @@ const SYNTHETIC: Record<string, string> = {
 <div class="quesroot" questionid="900031" bankid="2"><div class="info-list"><span class="info-item">题型：单选题</span></div>
 <div class="cnt-box"><div class="quest-cnt">下列正确的是<span data-ewb-qno="9">x</span></div><div class="quest-exam"><div class="src-box"><a class="src-item" title="原始出处：某卷">来源戊</a></div></div></div></div></section>
 <section class="answer-box"><div class="knowledges">知识点</div><span data-ewb-qno="abc"></span><p>答案图</p><img src="https://staticzujuan.xkw.com/a/b.png"><span data-ewb-role="option-label">戊</span></section></section></main></body></html>`,
+  // 知识点与难度的畸形写法：重复编号、缺 cid 靠链接补、坏编号、系数越界、没有任何信息的题都不能让整题失败
+  metaOdd: `<!doctype html><html><body><article class="exam-cnt"><section class="exam-list">
+<h4 class="sec-title"><span>一、单选题</span></h4>
+<div class="tk-quest-item" questionid="900051"><div class="ques-additional"><span class="addi-info"><span class="info-cnt">单选题</span></span><b class="gap">|</b><span class="addi-info"><span class="info-cnt">较难（0.30）</span></span><a class="ques-src">来源庚</a></div>
+<div class="exam-item__cnt">1. 第一题</div>
+<div hidden class="exam-item__opt"><div class="item knowlegde"><p class="knowledge-box">
+<a class="knowledge-name" href="/czsx/zsd12" cid="12" cname="  甲　乙 ">甲乙</a>
+<a class="knowledge-name" href="/czsx/zsd12" cid="12" cname="重复编号">重复编号</a>
+<a class="knowledge-name" href="/czyy/zsd77">后备名称</a>
+<a class="knowledge-name" href="javascript:void 0" cid="x1" cname="坏编号">坏编号</a>
+<a class="knowledge-name" href="/czsx/zsd-5" cid="-5" cname="负编号">负编号</a>
+<a class="knowledge-name" href="/czsx/zsd90" cid="90" cname="">   </a>
+<a class="knowledge-explain" href="javascript:void 0" cid="13" cname="解读不算">解读</a></p></div><div class="item answer"></div></div></div>
+<div class="tk-quest-item" questionid="900052"><div class="ques-additional"><span class="addi-info"><span class="info-cnt">单选题</span></span><b class="gap">|</b><span class="addi-info"><span class="info-cnt">适中 (1.5)</span></span><a class="ques-src">来源庚</a></div>
+<div class="exam-item__cnt">2. 第二题</div>
+<div hidden class="exam-item__opt"><div class="item answer"></div></div>
+<div class="exam-item__info"><a class="addques" qdname="适中" qdvalue="0.55">加入试题篮</a></div></div>
+<div class="tk-quest-item" questionid="900053"><div class="ques-additional"><span class="addi-info"><span class="info-cnt">单选题</span></span><a class="ques-src">来源庚</a></div>
+<div class="exam-item__cnt">3. 第三题</div>
+<div hidden class="exam-item__opt"><div class="item answer"></div></div></div>
+</section></article></body></html>`,
   // 说明文字后面只有一道小题：行首题号去掉，不留占位符
   loneNumber: `<!doctype html><html><body><article class="exam-cnt"><section class="exam-list">
 <h4 class="sec-title"><span>一、阅读</span></h4>
@@ -171,6 +194,30 @@ for (const [name, html] of Object.entries(SYNTHETIC)) {
   FILES[name] = join(synthDir, `${name}.html`)
   writeFileSync(FILES[name], html, 'utf8')
 }
+
+// 从数学卷样本派生：去掉知识点区块 / 同时去掉难度。先确认去掉的确实是 23 题的全部，再拿来测「读不到」
+const mathHtml = readFileSync(FILES.math, 'utf8')
+const countOf = (html: string, re: RegExp): number => (html.match(re) ?? []).length
+const KNOWLEDGE_BLOCK = /<div class="item knowlegde">[\s\S]*?<\/div>/g
+const DIFFICULTY_CELL = /<b class="gap">\|<\/b>\s*<span class="addi-info">\s*<span class="info-cnt">\s*[^<(（]*[（(]\s*[\d.]+\s*[)）]\s*<\/span>\s*<\/span>/g
+const DIFFICULTY_ATTRS = /\sqd(?:id|name|value)="[^"]*"/g
+const noKnowledgeHtml = mathHtml.replace(KNOWLEDGE_BLOCK, '')
+const noDifficultyHtml = mathHtml.replace(DIFFICULTY_CELL, '').replace(DIFFICULTY_ATTRS, '')
+const bareHtml = noKnowledgeHtml.replace(DIFFICULTY_CELL, '').replace(DIFFICULTY_ATTRS, '')
+assert.ok(countOf(mathHtml, /knowledge-name/g) >= 23, '样本里应有知识点')
+assert.equal(countOf(mathHtml, /class="item knowlegde"/g), 23)
+assert.equal(countOf(noKnowledgeHtml, /knowledge-name/g), 0)
+assert.equal(countOf(noDifficultyHtml, /class="item knowlegde"/g), 23, '只去难度时知识点区块都在')
+assert.equal(countOf(noDifficultyHtml, /(?:容易|适中|困难)\s*[（(]\s*\d/g), 0)
+assert.equal(countOf(mathHtml, DIFFICULTY_CELL), 23)
+assert.equal(countOf(bareHtml, /(?:容易|适中|困难)\s*[（(]\s*\d/g), 0)
+assert.equal(countOf(bareHtml, /qd(?:id|name|value)=/g), 0)
+FILES.mathNoKnowledge = join(synthDir, 'mathNoKnowledge.html')
+FILES.mathNoDifficulty = join(synthDir, 'mathNoDifficulty.html')
+FILES.mathBare = join(synthDir, 'mathBare.html')
+writeFileSync(FILES.mathNoKnowledge, noKnowledgeHtml, 'utf8')
+writeFileSync(FILES.mathNoDifficulty, noDifficultyHtml, 'utf8')
+writeFileSync(FILES.mathBare, bareHtml, 'utf8')
 
 console.log('拆题（真实页面环境）')
 const runs = await runPages(FILES)
@@ -358,6 +405,122 @@ await check('验证页与非题目页：kind 为 none，验证页标出 verifica
   assert.equal(runs.math.page.verification, false)
 })
 
+console.log('知识点与难度（拆题）')
+const SUBJECT_OF: Record<string, string> = { math: 'czsx', english: 'czyy', physics: 'czwl' }
+const sampleQuestions = ['math', 'english', 'physics'].flatMap((name) => runs[name].page.questions.map((q) => ({ name, q })))
+
+await check('三份试卷页 69 题：逐题都读到 1–6 个知识点与难度系数，学科代码与卷一致，编号不重复', () => {
+  assert.equal(sampleQuestions.length, 69)
+  for (const { name, q } of sampleQuestions) {
+    const where = `${name} 第 ${q.order + 1} 题`
+    assert.ok(q.knowledge.length >= 1 && q.knowledge.length <= 6, `${where} 知识点 ${q.knowledge.length} 个`)
+    assert.equal(new Set(q.knowledge.map((k) => k.id)).size, q.knowledge.length, `${where} 知识点编号重复`)
+    for (const k of q.knowledge) {
+      assert.ok(Number.isSafeInteger(k.id) && k.id > 0 && k.name.length > 0, `${where} 知识点异常：${JSON.stringify(k)}`)
+      assert.equal(k.subject, SUBJECT_OF[name], `${where} 学科代码`)
+    }
+    assert.ok(q.difficulty !== null && q.difficulty >= 0 && q.difficulty <= 1, `${where} 难度系数 ${q.difficulty}`)
+    assert.ok(q.difficultyLabel, `${where} 没读到档位文字`)
+  }
+  assert.ok(runs.question.page.questions.every((q) => q.difficultyLabel === ''), '单题页只有系数，没有档位文字')
+})
+
+await check('数学第 1 题与单题页主题：知识点编号、名称、顺序、学科、难度系数一致', () => {
+  const expected = [
+    { id: 4740, name: '倒数', subject: 'czsx' },
+    { id: 4748, name: '两个有理数的乘法运算', subject: 'czsx' },
+    { id: 4717, name: '绝对值的几何意义', subject: 'czsx' },
+    { id: 4731, name: '有理数加法运算', subject: 'czsx' }
+  ]
+  const paperQ = runs.math.page.questions[0]
+  const pageQ = runs.question.page.questions[0]
+  assert.equal(paperQ.qid, '17150767')
+  assert.deepEqual(paperQ.knowledge, expected)
+  assert.deepEqual(pageQ.knowledge, expected, '单题页只取答案区的知识点，不带相似题推荐里的')
+  assert.equal(paperQ.difficulty, 0.65)
+  assert.equal(pageQ.difficulty, 0.65)
+  assert.equal(paperQ.difficultyLabel, '适中')
+})
+
+await check('单题页答案里不混知识点（知识点区块仍从答案里剔除）', () => {
+  const q = runs.question.page.questions[0]
+  assert.equal(q.answerHtml, null)
+  const evil = runs.evilQuestion.page.questions[0]
+  assert.equal(evil.answerHtml, '<p>答案图</p><p><img src="ewb-pending:0">戊</p>')
+  assert.deepEqual(evil.knowledge, [])
+})
+
+// 档位表与组卷网页面一致的守卫：试卷页上每一对（档位文字，系数）都要落在 difficultyTier 给出的同名档位里
+const tierPairs = sampleQuestions.map(({ name, q }) => ({ where: `${name} 第 ${q.order + 1} 题`, label: q.difficultyLabel, coefficient: q.difficulty as number }))
+function tierViolations(): string[] {
+  return tierPairs.filter((p) => difficultyTier(p.coefficient)?.label !== p.label).map((p) => `${p.where}：页面「${p.label}」(${p.coefficient})，档位表给「${difficultyTier(p.coefficient)?.label}」`)
+}
+await check('档位不变量：试卷页每一对（档位文字，系数）都满足 difficultyTier(系数).label === 档位文字', () => {
+  assert.equal(tierPairs.length, 69)
+  assert.deepEqual(tierViolations(), [])
+  // 样本里各档的系数范围（档位表依据）：容易 0.81–0.95、适中 0.57–0.79、困难 0.40
+  const range = (label: string): [number, number] => {
+    const values = tierPairs.filter((p) => p.label === label).map((p) => p.coefficient)
+    return [Math.min(...values), Math.max(...values)]
+  }
+  assert.deepEqual(new Set(tierPairs.map((p) => p.label)), new Set(['容易', '适中', '困难']))
+  assert.deepEqual(range('容易'), [0.81, 0.95])
+  assert.deepEqual(range('适中'), [0.57, 0.79])
+  assert.deepEqual(range('困难'), [0.4, 0.4])
+  writeFileSync(join(evidence, 'difficulty-pairs.json'), JSON.stringify(Object.fromEntries(['容易', '适中', '困难'].map((l) => [l, { range: range(l), count: tierPairs.filter((p) => p.label === l).length }])), null, 1))
+})
+
+await check('档位不变量的守卫有效（反向验证）：临时改坏档位表，不变量变红，改回后恢复', () => {
+  const saved = DIFFICULTY_TIERS.map((t) => ({ min: t.min, max: t.max, label: t.label }))
+  const damage: [string, (t: (typeof DIFFICULTY_TIERS)[number][]) => void][] = [
+    ['适中下界抬到 0.6（0.57 的题落进困难）', (t) => void (t[1].min = 0.6, t[2].max = 0.6)],
+    ['容易下界抬到 0.9（0.81–0.89 的题落进适中）', (t) => void (t[0].min = 0.9, t[1].max = 0.9)],
+    ['困难上界压到 0.3（0.40 的题落进适中）', (t) => void (t[2].max = 0.3, t[1].min = 0.3)],
+    ['档位名写错', (t) => void (t[1].label = '中等')]
+  ]
+  const tiers = DIFFICULTY_TIERS as unknown as (typeof DIFFICULTY_TIERS)[number][]
+  try {
+    for (const [what, apply] of damage) {
+      apply(tiers)
+      assert.ok(tierViolations().length > 0, `改坏档位表（${what}）后不变量没有变红`)
+      tiers.forEach((t, i) => Object.assign(t, saved[i]))
+    }
+  } finally {
+    tiers.forEach((t, i) => Object.assign(t, saved[i]))
+  }
+  assert.deepEqual(tierViolations(), [], '档位表应已还原')
+})
+
+await check('读不到时为空、不让整题失败：去掉知识点 / 去掉难度 / 两样都去掉的页面', () => {
+  const noK = runs.mathNoKnowledge.page
+  assert.equal(noK.questions.length, 23)
+  assert.ok(noK.questions.every((q) => q.knowledge.length === 0 && q.difficulty !== null && q.difficultyLabel !== ''))
+  const noD = runs.mathNoDifficulty.page
+  assert.equal(noD.questions.length, 23)
+  assert.ok(noD.questions.every((q) => q.knowledge.length > 0 && q.difficulty === null && q.difficultyLabel === ''), '只去掉难度：知识点照读，难度为空')
+  assert.deepEqual(noD.questions.map((q) => q.knowledge), runs.math.page.questions.map((q) => q.knowledge))
+  const bare = runs.mathBare.page
+  assert.equal(bare.questions.length, 23)
+  assert.ok(bare.questions.every((q) => q.knowledge.length === 0 && q.difficulty === null && q.difficultyLabel === ''))
+  assert.deepEqual(bare.questions.map((q) => q.stemText), runs.math.page.questions.map((q) => q.stemText), '去掉知识点与难度不影响题干')
+  assert.equal(bare.declaredCount, 23)
+})
+
+await check('畸形写法：重复编号只留第一个、缺 cid 靠链接补、坏编号与空名称跳过、解读链接不算；全角括号与系数越界', () => {
+  const [a, b, c] = runs.metaOdd.page.questions
+  assert.deepEqual(a.knowledge, [
+    { id: 12, name: '甲 乙', subject: 'czsx' },
+    { id: 77, name: '后备名称', subject: 'czyy' }
+  ])
+  assert.equal(a.difficulty, 0.3)
+  assert.equal(a.difficultyLabel, '较难')
+  assert.deepEqual(b.knowledge, [])
+  assert.equal(b.difficulty, 0.55, '页面文字的系数越界时退到加入试题篮按钮上的属性')
+  assert.equal(b.difficultyLabel, '适中')
+  assert.deepEqual([c.knowledge, c.difficulty, c.difficultyLabel], [[], null, ''])
+  assert.equal(runs.metaOdd.page.questions.length, 3)
+})
+
 console.log('链接规则')
 await check('组卷网链接分类、规范化与粘贴拆分', () => {
   assert.equal(classifyZujuanUrl('https://zujuan.xkw.com/2p3543573.html'), 'paper')
@@ -423,7 +586,7 @@ try {
   })
   const r1 = commitPages(db, dataDir, [questionPage])
   await check('提交单题：新增 1 道，来源卷记录生成', () => {
-    assert.deepEqual(r1, { added: 1, skipped: 0 })
+    assert.deepEqual(r1, { added: 1, skipped: 0, filled: 0 })
     const papers = listSourcePapers(db)
     assert.equal(papers.length, 1)
     assert.equal(papers[0].url, PAPER_URL)
@@ -451,7 +614,7 @@ try {
   })
   const r2 = commitPages(db, dataDir, [mathPage])
   await check('提交试卷：新增 22、跳过 1；内容里没有待保存引用，图片文件都在；失败的图片被去掉', () => {
-    assert.deepEqual(r2, { added: 22, skipped: 1 })
+    assert.deepEqual(r2, { added: 22, skipped: 1, filled: 0 })
     const all = listQuestions(db, {}).items
     assert.equal(all.length, 23)
     assert.equal(listSourcePapers(db).length, 1, '单题页的出处卷与整卷是同一条来源卷记录')
@@ -475,7 +638,7 @@ try {
   await check('同一链接再入一次：全部已在库，提交为 0 新增 23 跳过，库里题数不变', () => {
     assert.ok(again.questions.every((q) => q.duplicate))
     assert.ok(toPreview(again, 't').questions.every((q) => q.duplicate))
-    assert.deepEqual(commitPages(db, dataDir, [again]), { added: 0, skipped: 23 })
+    assert.deepEqual(commitPages(db, dataDir, [again]), { added: 0, skipped: 23, filled: 0 })
     assert.equal(listQuestions(db, {}).total, 23)
   })
 
@@ -486,7 +649,7 @@ try {
     const pageB = await preparePage(runs.physics.page, 'https://zujuan.xkw.com/3p2.html', { db, fetchImage: fetchOk, seen: seenJob, pageIndex: 1 })
     assert.equal(pageA.questions.filter((q) => q.duplicate).length, 0)
     assert.ok(pageB.questions.every((q) => q.duplicate), '第二页的题在本次任务里已出现过')
-    assert.deepEqual(commitPages(db, dataDir, [pageA]), { added: 26, skipped: 0 })
+    assert.deepEqual(commitPages(db, dataDir, [pageA]), { added: 26, skipped: 0, filled: 0 })
     // pageC 在 pageA 提交之前做的预览：全部显示为新题，提交时被核对出重复
     const emptyDir = mkdtempSync(join(tmpdir(), 'ewb-empty-'))
     const emptyDb = openDatabase(emptyDir)
@@ -494,7 +657,7 @@ try {
     emptyDb.close()
     rmSync(emptyDir, { recursive: true, force: true })
     assert.ok(stale.questions.every((q) => !q.duplicate))
-    assert.deepEqual(commitPages(db, dataDir, [stale]), { added: 0, skipped: 26 })
+    assert.deepEqual(commitPages(db, dataDir, [stale]), { added: 0, skipped: 26, filled: 0 })
   })
 
   await check('没有题目编号时按内容指纹去重（题干文字加图片哈希）', async () => {
@@ -503,10 +666,10 @@ try {
     const fetchOk = makeFetcher().fetcher
     const first = await preparePage(noQid, 'https://zujuan.xkw.com/3p9.html', { db, fetchImage: fetchOk, seen: new SeenQuestions(), pageIndex: 0 })
     assert.ok(first.questions.every((q) => !q.duplicate))
-    assert.deepEqual(commitPages(db, dataDir, [first]), { added: 3, skipped: 0 })
+    assert.deepEqual(commitPages(db, dataDir, [first]), { added: 3, skipped: 0, filled: 0 })
     const second = await preparePage(noQid, 'https://zujuan.xkw.com/3p9.html', { db, fetchImage: fetchOk, seen: new SeenQuestions(), pageIndex: 0 })
     assert.ok(second.questions.every((q) => q.duplicate))
-    assert.deepEqual(commitPages(db, dataDir, [second]), { added: 0, skipped: 3 })
+    assert.deepEqual(commitPages(db, dataDir, [second]), { added: 0, skipped: 3, filled: 0 })
     // 同题带编号再入：与「无编号入库的同内容题」算重复
     const withQid = structuredClone(runs.english.page)
     withQid.questions = withQid.questions.slice(0, 3)
@@ -521,7 +684,7 @@ try {
     const preview = toPreview(page, 't')
     assert.equal(preview.imageFailed, 2)
     assert.equal(preview.questions[0].failedImages, 2)
-    assert.deepEqual(commitPages(db, dataDir, [page]), { added: 1, skipped: 0 })
+    assert.deepEqual(commitPages(db, dataDir, [page]), { added: 1, skipped: 0, filled: 0 })
     const stored = listQuestions(db, { keyword: 'ewb-pending:99' }).items[0]
     assert.equal(stored.stemHtml, '<p>文字 ewb-pending:99 乙丙 结束</p>')
   })
@@ -570,6 +733,225 @@ try {
     assert.ok(siblings > 0)
     assert.equal(listSourcePapers(db).length, before - 1)
     assert.equal(listQuestions(db, { sourcePaperId: lone.sourcePaperId! }).total, 0)
+  })
+
+  // ---------- 知识点与难度入库、补齐（每个用例各用一个全新的库） ----------
+  type Db = ReturnType<typeof openDatabase>
+  async function withFreshDb(fn: (fresh: Db, freshDir: string) => Promise<void>): Promise<void> {
+    const freshDir = mkdtempSync(join(tmpdir(), 'ewb-import-meta-'))
+    mkdirSync(join(freshDir, 'assets'), { recursive: true })
+    const fresh = openDatabase(freshDir)
+    try {
+      await fn(fresh, freshDir)
+    } finally {
+      fresh.close()
+      rmSync(freshDir, { recursive: true, force: true })
+    }
+  }
+  const prep = (fresh: Db, page: ExtractedPage, seenJob = new SeenQuestions(), pageIndex = 0) =>
+    preparePage(page, PAPER_URL, { db: fresh, fetchImage: makeFetcher().fetcher, seen: seenJob, pageIndex })
+  const libraryOf = (fresh: Db): Map<string, { id: number; knowledge: unknown; difficulty: number | null }> =>
+    new Map(listQuestions(fresh, {}).items.map((q) => [q.zujuanQid ?? `#${q.id}`, { id: q.id, knowledge: q.knowledge, difficulty: q.difficulty }]))
+  const pageMeta = (q: ExtractedPage['questions'][number]): { knowledge: unknown; difficulty: number | null } => ({ knowledge: q.knowledge, difficulty: q.difficulty })
+  const fills = (preview: ReturnType<typeof toPreview>): number => preview.questions.filter((q) => q.fill).length
+
+  await check('入库写知识点与难度：新题入库后逐题与页面一致（页面顺序），预览带知识点数与系数', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      const page = await prep(fresh, runs.math.page)
+      const preview = toPreview(page, 't')
+      assert.equal(preview.noKnowledge, 0)
+      assert.deepEqual(preview.questions.map((q) => q.knowledgeCount), runs.math.page.questions.map((q) => q.knowledge.length))
+      assert.deepEqual(preview.questions.map((q) => q.difficulty), runs.math.page.questions.map((q) => q.difficulty))
+      assert.ok(preview.questions.every((q) => !q.fill && !q.duplicate))
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 23, skipped: 0, filled: 0 })
+      const stored = libraryOf(fresh)
+      assert.equal(stored.size, 23)
+      for (const q of runs.math.page.questions) assert.deepEqual({ knowledge: stored.get(q.qid!)!.knowledge, difficulty: stored.get(q.qid!)!.difficulty }, pageMeta(q), `第 ${q.order + 1} 题`)
+    })
+  })
+
+  await check('去掉知识点区块的页面：noKnowledge 等于题数，题照常入库（有难度的照存），库里没有知识点', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      const page = await prep(fresh, runs.mathNoKnowledge.page)
+      const preview = toPreview(page, 't')
+      assert.equal(preview.noKnowledge, 23)
+      assert.equal(preview.noDifficulty, 0)
+      assert.equal(preview.noKnowledge, preview.questions.length)
+      assert.ok(preview.questions.every((q) => q.knowledgeCount === 0 && q.difficulty !== null))
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 23, skipped: 0, filled: 0 })
+      const items = listQuestions(fresh, {}).items
+      assert.equal(items.length, 23)
+      assert.ok(items.every((q) => q.knowledge.length === 0 && q.difficulty !== null))
+      assert.equal(fresh.prepare('SELECT COUNT(*) AS n FROM question_knowledge').get()!.n, 0)
+    })
+  })
+
+  await check('noKnowledge 含已在库的题：本页没读到的算，读到的不算；页面读数异常（坏编号、空名称、越界系数）被规整掉', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      assert.deepEqual(commitPages(fresh, freshDir, [await prep(fresh, runs.english.page)]), { added: 20, skipped: 0, filled: 0 })
+      const partial = structuredClone(runs.english.page)
+      for (const i of [0, 5, 19]) partial.questions[i].knowledge = []
+      for (const i of [1, 2]) partial.questions[i].difficulty = null
+      const preview = toPreview(await prep(fresh, partial), 't')
+      assert.ok(preview.questions.every((q) => q.duplicate))
+      assert.equal(preview.noKnowledge, 3, '已在库的题也要计入')
+      assert.equal(preview.noDifficulty, 2, '没取到难度的题同样计入，含已在库的')
+      assert.equal(fills(preview), 0, '库里已有知识点与难度，不需要补')
+      const hostile = structuredClone(runs.english.page)
+      hostile.questions[0].knowledge = [
+        { id: -1, name: '负编号', subject: 'czyy' },
+        { id: 5, name: '   ', subject: 'czyy' },
+        { id: 7, name: '有效', subject: '<script>' },
+        { id: 7, name: '同编号', subject: 'czyy' },
+        { id: 1.5, name: '小数编号', subject: 'czyy' }
+      ]
+      hostile.questions[0].difficulty = 7
+      hostile.questions[1].difficulty = Number.NaN
+      const prepared = await prep(fresh, hostile)
+      assert.deepEqual(prepared.questions[0].knowledge, [{ id: 7, name: '有效', subject: '' }])
+      assert.equal(prepared.questions[0].difficulty, null)
+      assert.equal(prepared.questions[1].difficulty, null)
+    })
+  })
+
+  await check('去掉难度的页面：noDifficulty 等于题数，题照常入库（知识点照存）；之后再入原页面只补难度，已有知识点不动', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      const page = await prep(fresh, runs.mathNoDifficulty.page)
+      const preview = toPreview(page, 't')
+      assert.equal(preview.noDifficulty, 23)
+      assert.equal(preview.noDifficulty, preview.questions.length)
+      assert.equal(preview.noKnowledge, 0)
+      assert.ok(preview.questions.every((q) => q.difficulty === null && q.knowledgeCount > 0))
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 23, skipped: 0, filled: 0 })
+      const first = libraryOf(fresh)
+      assert.ok([...first.values()].every((q) => q.difficulty === null && (q.knowledge as unknown[]).length > 0))
+      assert.equal(fresh.prepare('SELECT COUNT(*) AS n FROM question_difficulty').get()!.n, 0)
+
+      const again = await prep(fresh, runs.math.page)
+      const againPreview = toPreview(again, 't')
+      assert.equal(againPreview.noDifficulty, 0)
+      assert.equal(fills(againPreview), 23, '库里只缺难度也要补')
+      assert.deepEqual(commitPages(fresh, freshDir, [again]), { added: 0, skipped: 23, filled: 23 })
+      const after = libraryOf(fresh)
+      for (const q of runs.math.page.questions) {
+        assert.deepEqual(after.get(q.qid!)!.knowledge, first.get(q.qid!)!.knowledge, `第 ${q.order + 1} 题已有的知识点不动`)
+        assert.equal(after.get(q.qid!)!.difficulty, q.difficulty)
+      }
+      // 反过来：库里只缺知识点，用只去掉知识点的页面补不了任何东西
+      const stripped = await prep(fresh, runs.mathNoKnowledge.page)
+      assert.equal(fills(toPreview(stripped, 't')), 0)
+    })
+  })
+
+  await check('补齐：先入库去掉知识点与难度的页面，再入原页面——预览 fill 与提交 filled 正确，不新增题，已有的不被改', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      assert.deepEqual(commitPages(fresh, freshDir, [await prep(fresh, runs.mathBare.page)]), { added: 23, skipped: 0, filled: 0 })
+      assert.ok([...libraryOf(fresh).values()].every((q) => (q.knowledge as unknown[]).length === 0 && q.difficulty === null))
+      // 库里已有的三种情形：两样都有 / 只有知识点 / 只有难度（来自更早的入库），补齐不能改动它们
+      const qids = runs.math.page.questions.map((q) => q.qid!)
+      const before = libraryOf(fresh)
+      const oldK = [{ id: 999999, name: '旧知识点', subject: 'czsx' }]
+      saveQuestionMeta(fresh, before.get(qids[1])!.id, { knowledge: oldK, difficulty: 0.3 })
+      saveQuestionMeta(fresh, before.get(qids[2])!.id, { knowledge: [{ id: 888888, name: '只有知识点', subject: 'czsx' }], difficulty: null })
+      saveQuestionMeta(fresh, before.get(qids[3])!.id, { knowledge: [], difficulty: 0.11 })
+
+      const page = await prep(fresh, runs.math.page)
+      const preview = toPreview(page, 't')
+      assert.ok(preview.questions.every((q) => q.duplicate), '全部已在库')
+      assert.equal(preview.questions[1].fill, false, '两样都有，不补')
+      assert.equal(fills(preview), 22)
+      assert.equal(preview.noKnowledge, 0)
+      assert.equal(preview.questions.filter((q) => !q.duplicate).length, 0)
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 0, skipped: 23, filled: 22 })
+
+      const after = libraryOf(fresh)
+      assert.equal(after.size, 23, '不新增题')
+      for (const q of runs.math.page.questions) {
+        const got = after.get(q.qid!)!
+        const i = q.order
+        if (i === 1) assert.deepEqual({ knowledge: got.knowledge, difficulty: got.difficulty }, { knowledge: oldK, difficulty: 0.3 }, '已有知识点与难度的题不被改')
+        else if (i === 2) assert.deepEqual({ knowledge: got.knowledge, difficulty: got.difficulty }, { knowledge: [{ id: 888888, name: '只有知识点', subject: 'czsx' }], difficulty: q.difficulty }, '只补缺的难度，已有知识点不动')
+        else if (i === 3) assert.deepEqual({ knowledge: got.knowledge, difficulty: got.difficulty }, { knowledge: q.knowledge, difficulty: 0.11 }, '只补缺的知识点，已有难度不动')
+        else assert.deepEqual({ knowledge: got.knowledge, difficulty: got.difficulty }, pageMeta(q), `第 ${i + 1} 题`)
+      }
+      // 再入一次：没有可补的了；用去掉信息的页面再入，页面读不到就什么也不改
+      const again = await prep(fresh, runs.math.page)
+      assert.equal(fills(toPreview(again, 't')), 0)
+      assert.deepEqual(commitPages(fresh, freshDir, [again]), { added: 0, skipped: 23, filled: 0 })
+      const bareAgain = await prep(fresh, runs.mathBare.page)
+      assert.equal(fills(toPreview(bareAgain, 't')), 0)
+      assert.equal(toPreview(bareAgain, 't').noKnowledge, 23)
+      assert.equal(toPreview(bareAgain, 't').noDifficulty, 23)
+      assert.deepEqual(commitPages(fresh, freshDir, [bareAgain]), { added: 0, skipped: 23, filled: 0 })
+      assert.deepEqual(libraryOf(fresh), after, '库内容不变')
+    })
+  })
+
+  await check('补齐只算一次：同一次入库里前面出现过的重复题不算；预览之后库里才多出的题，提交时也能补', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      commitPages(fresh, freshDir, [await prep(fresh, runs.mathBare.page)])
+      const job = new SeenQuestions()
+      const a = await prep(fresh, runs.math.page, job, 0)
+      const b = await prep(fresh, runs.math.page, job, 1)
+      assert.equal(fills(toPreview(a, 't')), 23)
+      assert.equal(fills(toPreview(b, 't')), 0, '同一次入库里前面补过的题，后面重复出现的不再算')
+      assert.ok(b.questions.every((q) => q.duplicate && q.repeatInJob))
+      assert.deepEqual(commitPages(fresh, freshDir, [a, b]), { added: 0, skipped: 46, filled: 23 })
+    })
+    await withFreshDb(async (fresh, freshDir) => {
+      // pageStale 在库里还没有这些题时做的预览（全是新题）；之后另一次入库把无知识点的版本写进库，再提交 stale
+      const emptyDir = mkdtempSync(join(tmpdir(), 'ewb-empty-meta-'))
+      const emptyDb = openDatabase(emptyDir)
+      const stale = await prep(emptyDb, runs.math.page)
+      emptyDb.close()
+      rmSync(emptyDir, { recursive: true, force: true })
+      assert.ok(stale.questions.every((q) => !q.duplicate && !q.fill))
+      commitPages(fresh, freshDir, [await prep(fresh, runs.mathBare.page)])
+      assert.deepEqual(commitPages(fresh, freshDir, [stale]), { added: 0, skipped: 23, filled: 23 })
+      assert.ok([...libraryOf(fresh).values()].every((q) => (q.knowledge as unknown[]).length > 0 && q.difficulty !== null))
+    })
+  })
+
+  await check('新题与待补齐的题混在一页：单题页先以无信息入库，再入整张试卷——新增 22、补齐 1', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      const bareQuestion = structuredClone(runs.question.page)
+      bareQuestion.questions[0].knowledge = []
+      bareQuestion.questions[0].difficulty = null
+      assert.deepEqual(commitPages(fresh, freshDir, [await prep(fresh, bareQuestion)]), { added: 1, skipped: 0, filled: 0 })
+      const page = await prep(fresh, runs.math.page)
+      const preview = toPreview(page, 't')
+      assert.equal(preview.questions.filter((q) => !q.duplicate).length, 22)
+      assert.equal(fills(preview), 1)
+      assert.equal(preview.questions.find((q) => q.fill)!.duplicate, true)
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 22, skipped: 1, filled: 1 })
+      const stored = libraryOf(fresh)
+      assert.equal(stored.size, 23)
+      for (const q of runs.math.page.questions) assert.deepEqual({ knowledge: stored.get(q.qid!)!.knowledge, difficulty: stored.get(q.qid!)!.difficulty }, pageMeta(q))
+    })
+  })
+
+  await check('无题目编号按内容指纹找到库里那道题补齐；补齐写到一半失败，整次入库回滚（新增的题也不留）', async () => {
+    await withFreshDb(async (fresh, freshDir) => {
+      const noQid = structuredClone(runs.english.page)
+      noQid.questions = noQid.questions.slice(0, 3).map((q) => ({ ...q, qid: null, knowledge: [], difficulty: null }))
+      assert.deepEqual(commitPages(fresh, freshDir, [await prep(fresh, noQid)]), { added: 3, skipped: 0, filled: 0 })
+      const withMeta = structuredClone(runs.english.page)
+      withMeta.questions = withMeta.questions.slice(0, 3).map((q) => ({ ...q, qid: null }))
+      const page = await prep(fresh, withMeta)
+      assert.equal(fills(toPreview(page, 't')), 3)
+      assert.deepEqual(commitPages(fresh, freshDir, [page]), { added: 0, skipped: 3, filled: 3 })
+      assert.equal(listQuestions(fresh, {}).items.length, 3)
+      // 回滚：补齐写到一半失败（知识点表被占住），整次入库一条都不留
+      const before = libraryOf(fresh)
+      const failing = await prep(fresh, runs.mathBare.page)
+      const filling = await prep(fresh, runs.math.page)
+      // 先入的 failing 新增 23 道，后一页 filling 的同一批题在提交时才发现已在库、去补难度——触发器让这一步失败
+      fresh.exec('CREATE TRIGGER fail_meta BEFORE INSERT ON question_difficulty BEGIN SELECT RAISE(ABORT, \'故意失败\'); END')
+      assert.throws(() => commitPages(fresh, freshDir, [failing, filling]), /故意失败/)
+      fresh.exec('DROP TRIGGER fail_meta')
+      assert.deepEqual(libraryOf(fresh), before)
+      assert.equal(fresh.prepare('SELECT COUNT(*) AS n FROM questions').get()!.n, 3)
+    })
   })
 } finally {
   db.close()

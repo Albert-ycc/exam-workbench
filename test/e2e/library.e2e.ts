@@ -14,9 +14,9 @@ const mode = process.argv[2] === 'online' ? 'online' : 'offline'
 const evidence = process.argv[3] ?? mkdtempSync(join(tmpdir(), 'ewb-library-e2e-'))
 mkdirSync(evidence, { recursive: true })
 if (mode === 'offline') process.env.EWB_IMPORT_GAP_MS = '300'
-buildTo('out-pages4')
+buildTo('out-lib3')
 // 离线模式：域名解析全部屏蔽，采集页在拦截生效前发出的请求也出不了网；online 模式才真正访问组卷网
-const { app, window, dataDir } = await (mode === 'offline' ? launchOffline({ outDir: 'out-pages4' }) : launchApp({ outDir: 'out-pages4' }))
+const { app, window, dataDir } = await (mode === 'offline' ? launchOffline({ outDir: 'out-lib3' }) : launchApp({ outDir: 'out-lib3' }))
 const shot = (name: string): Promise<Buffer> => window.screenshot({ path: join(evidence, `${mode}-${name}.png`) })
 let step = 0
 const log = (text: string): void => console.log(`  ✓ ${++step}. ${text}`)
@@ -82,6 +82,14 @@ async function libraryChecks(): Promise<void> {
   log(`试题库：关键词筛选（「倒数」${kw.total} 道，「data-role」不命中标签属性，空结果写出当前条件）`)
   await window.locator('.lb-empty').getByRole('button', { name: '清除筛选', exact: true }).click()
   await window.getByText('共 23 道题').waitFor()
+  // 入库时读到的难度与知识点：显示在题目行，左栏难度、知识点筛选有题数（归类筛选的细节在 library-classify.e2e.ts）
+  const withMeta = await window.evaluate(() => window.workbench.library.listQuestions({ limit: 1000 }))
+  const withDifficulty = withMeta.items.filter((q) => q.difficulty !== null).length
+  assert.ok(withDifficulty > 0 && withMeta.items.some((q) => q.knowledge.length > 0), '入库应读到难度与知识点')
+  assert.equal(await window.getByTestId('meta-difficulty').count(), Math.min(30, withMeta.items.slice(0, 30).filter((q) => q.difficulty !== null).length))
+  assert.ok((await window.locator('.lb-filter .cf-chips--tiles .cf-chip').count()) > 0)
+  assert.ok((await window.locator('.lb-filter section', { hasText: '知识点' }).locator('.cf-row').count()) > 0)
+  log(`试题库：入库读到的难度（${withDifficulty} 道）与知识点显示在题目行与左栏筛选里`)
 }
 
 async function answerCheck(): Promise<void> {

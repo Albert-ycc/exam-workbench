@@ -1,4 +1,5 @@
 // 领域模型：试题库原题、试卷草稿、版本快照、下载配置。三条开发线共用，改动需主线统一调整。
+import type { KnowledgeRef, TagRef } from './classify'
 
 // ---------- 题目内容约定 ----------
 // 1. stemHtml 不含题目开头的题号（如「1．」），题号由界面与导出按顺序生成。
@@ -24,6 +25,11 @@ export interface LibraryQuestion {
   stemHtml: string
   answerHtml: string | null
   createdAt: string
+  // 归类（见 shared/classify.ts）：章节与标签由老师维护，知识点与难度入库时从组卷网读取
+  chapterId: number | null
+  knowledge: KnowledgeRef[] // 页面上的顺序
+  difficulty: number | null // 组卷网难度系数，档位用 difficultyTier 换算
+  tags: TagRef[] // 按名称排序
 }
 
 export interface SourcePaper {
@@ -81,6 +87,8 @@ export interface PaperSummary {
   draftDirty: boolean
   structure: StructureSummary
   updatedAt: string
+  categoryId: number | null // 试卷库分类；null 为「未分类」。分类与标签只用于整理，不进版本快照，改了不动 updatedAt
+  tags: TagRef[] // 按名称排序
 }
 
 export interface PaperDetail {

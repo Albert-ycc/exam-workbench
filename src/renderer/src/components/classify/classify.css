@@ -1,0 +1,419 @@
+/* 归类组件：试题库四个筛选块、打标签小框、管理标签弹窗。方向 C：发丝线、蓝黑选中、中性样式（难度、知识点、标签都不用红绿）。
+   选项行照试题库左栏的 lb-types 写法（30px 高、发丝线分隔、选中蓝黑底白字、题数用宋体 <em>）。 */
+
+/* ---------- 筛选块外壳 ---------- */
+.cf-block {
+  min-width: 0;
+}
+.cf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ink);
+}
+.cf-title {
+  margin: 0;
+  font: 700 14px var(--song);
+  letter-spacing: 1px;
+}
+.cf-head .cf-clear {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+.cf-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.cf-foot .ui-btn {
+  font-size: 13px;
+}
+.cf-note {
+  margin: 0;
+  padding: 4px 0 2px;
+  color: var(--mute);
+  font-size: 13px;
+}
+.cf-search {
+  margin-bottom: 6px;
+}
+
+/* 内部滚动框只留两处：知识点展开全部后、compact 里的标签；章节树与左栏里的标签区由外层整体滚（嵌套滚动难操作） */
+.cf-scroll--capped {
+  max-height: 320px;
+  overflow: auto;
+}
+.cf-scroll--chips {
+  max-height: 168px;
+  overflow: auto;
+}
+.cf-block--compact .cf-scroll--capped {
+  max-height: 220px;
+}
+.cf-block--compact .cf-scroll--chips {
+  max-height: 120px;
+}
+
+/* ---------- 选项行（章节、知识点） ---------- */
+.cf-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cf-row {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid #efefec;
+  background: transparent;
+  color: var(--ink-2);
+}
+.cf-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.cf-item:hover:not(:disabled) {
+  background: transparent;
+}
+.cf-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-item em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 14px var(--song);
+}
+.cf-item:focus-visible,
+.cf-caret:focus-visible {
+  outline-offset: -2px;
+}
+.cf-row:hover:not(.is-on) {
+  background: var(--tint);
+  color: var(--ink);
+}
+.cf-row.is-on {
+  background: var(--bb);
+  color: #fff;
+}
+.cf-row.is-on .cf-item {
+  font-weight: 700;
+}
+.cf-row.is-on .cf-item em {
+  color: #fff;
+}
+/* 当前条件下为 0：变淡但仍可点 */
+.cf-row.is-zero {
+  color: var(--mute);
+}
+.cf-row.is-zero .cf-item em {
+  color: #a3a59f;
+}
+
+/* 章的展开箭头与对齐占位 */
+.cf-caret,
+.cf-caret-gap {
+  flex: 0 0 22px;
+  width: 22px;
+}
+.cf-caret {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mute);
+}
+.cf-caret:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+.cf-row.is-on .cf-caret {
+  color: #fff;
+}
+.cf-row .cf-caret + .cf-item,
+.cf-row .cf-caret-gap + .cf-item {
+  padding-left: 2px;
+}
+/* 节：整行缩进、字号小一档（与左栏题型的子类同款） */
+.cf-sub .cf-row {
+  padding-left: 22px;
+}
+.cf-sub .cf-item {
+  height: 27px;
+  padding-left: 10px;
+  font-size: 13px;
+}
+.cf-block--compact .cf-item {
+  height: 28px;
+  font-size: 13px;
+}
+.cf-block--compact .cf-sub .cf-item {
+  height: 26px;
+}
+
+/* 知识点名称最多两行，换行显示，不用省略号截掉后缀 */
+.cf-item--wrap {
+  height: auto;
+  min-height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: 1.35;
+}
+.cf-item--wrap > span {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.cf-block--compact .cf-item--wrap {
+  min-height: 28px;
+}
+
+/* 知识点：选中的一块固定在上面，不跟着下面的列表滚动 */
+.cf-pinned {
+  max-height: 150px;
+  margin-bottom: 6px;
+  overflow: auto;
+}
+.cf-block--compact .cf-pinned {
+  max-height: 112px;
+}
+
+/* 知识点分组标题 */
+.cf-group + .cf-group {
+  margin-top: 8px;
+}
+.cf-group-name {
+  padding: 4px 8px 3px;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+/* ---------- 小块（难度档位、标签） ---------- */
+.cf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cf-chips > li {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.cf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.cf-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-chip em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 13px var(--song);
+}
+.cf-chip:hover:not(:disabled, .is-on) {
+  border-color: var(--ink);
+  background: var(--tint);
+  color: var(--ink);
+}
+.cf-chip.is-on {
+  border-color: var(--bb);
+  background: var(--bb);
+  color: #fff;
+}
+.cf-chip.is-on em {
+  color: #fff;
+}
+.cf-chip.is-zero:not(.is-on) {
+  border-color: var(--rule);
+  color: var(--mute);
+}
+.cf-chip.is-zero:not(.is-on) em {
+  color: #a3a59f;
+}
+.cf-block--compact .cf-chip {
+  height: 26px;
+}
+
+/* 难度：各档等宽的小方块，名称在上、题数在下 */
+.cf-chips--tiles > li {
+  flex: 1 1 56px;
+}
+.cf-chips--tiles .cf-chip {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  height: auto;
+  padding: 4px 6px;
+  line-height: 1.45;
+}
+
+/* ---------- 打标签小框 ---------- */
+.cf-picker {
+  display: flex;
+  flex-direction: column;
+  width: 264px;
+  max-width: 100%;
+}
+.cf-picker-search {
+  padding: 8px 8px 6px;
+}
+.cf-picker-list {
+  max-height: 208px;
+  overflow: auto;
+  padding: 0 0 4px;
+}
+.cf-picker-empty {
+  margin: 0;
+  padding: 12px 12px 10px;
+  color: var(--mute);
+  font-size: 13px;
+}
+.cf-prow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  color: var(--ink);
+}
+.cf-prow.is-active {
+  background: var(--tint);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+.cf-prow .ui-check {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.cf-prow .ui-check > span {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.cf-prow-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-prow em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 13px var(--song);
+}
+.cf-prow--new {
+  gap: 8px;
+  color: var(--bb);
+  cursor: pointer;
+}
+.cf-prow--new b {
+  font-weight: 700;
+}
+.cf-picker-foot {
+  padding: 5px 12px 6px;
+  border-top: 1px solid var(--rule);
+}
+.cf-picker-foot .ui-btn {
+  font-size: 13px;
+}
+
+/* 半选（批量时只有部分题带这个标签）：空心框 + 蓝黑横杠，与全选的实心勾一眼分得开 */
+.cf-prow .ui-check input:indeterminate {
+  border-color: var(--bb);
+  background-color: var(--paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f3a68' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+
+/* 阻止保存的提示（名称超长）：红，方向 C 里红用于错误 */
+.cf-warn {
+  margin: 0 8px 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* ---------- 管理标签弹窗 ---------- */
+.cf-mlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cf-mrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 42px;
+  border-bottom: 1px solid var(--rule);
+}
+.cf-mname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-mcount {
+  color: var(--mute);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cf-mactions {
+  display: inline-flex;
+  gap: 2px;
+}
+.cf-mname-input {
+  margin: 5px 0;
+}
+.cf-mrow-warn {
+  grid-column: 1 / -1;
+  margin: 0 0 6px;
+}

@@ -19,10 +19,96 @@
   --row-bg: var(--red-bg);
 }
 
-.lb-idx {
+.lb-row.is-selected:not(.is-confirming) {
+  --row-bg: var(--bb-bg);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+
+/* 第一列：勾选框在上，序号在下 */
+.lb-sel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   padding-top: 3px;
+}
+
+.lb-idx {
   color: var(--mute);
   font: 15px var(--song);
+}
+
+/* 章节、难度、知识点、标签：中性样式，没有的项不占位 */
+.lb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.lb-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 章节与难度同一行：整组不换行，章节路径过长在末尾省略，难度始终完整 */
+.lb-meta-line {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.lb-meta-chapter {
+  flex: 0 1 auto;
+}
+
+.lb-meta-fixed {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.lb-meta-k {
+  flex: 0 0 auto;
+  color: var(--mute);
+}
+
+.lb-meta-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-meta-more {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font-family: var(--song);
+}
+
+.lb-tagchip {
+  display: inline-block;
+  max-width: 160px;
+  height: 20px;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lb-main {
@@ -117,6 +203,11 @@
 
 .lb-ops .lb-del {
   border-color: var(--rule-2);
+}
+
+.lb-ops-pair {
+  display: flex;
+  gap: 6px;
 }
 
 .lb-usage {
@@ -421,4 +512,161 @@
   color: var(--mute);
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* ---------- 归到章节的选择框 ---------- */
+.lb-cp {
+  display: flex;
+  flex-direction: column;
+  width: 272px;
+  max-width: 100%;
+}
+
+.lb-cp-list {
+  max-height: 280px;
+  padding: 4px 0;
+  overflow: auto;
+}
+
+.lb-cp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+}
+
+.lb-cp-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-cp-row em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 13px var(--song);
+}
+
+.lb-cp-row:hover:not(:disabled),
+.lb-cp-row:focus-visible {
+  outline: none;
+  background: var(--tint);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+
+.lb-cp-row--sub {
+  padding-left: 28px;
+  font-size: 13.5px;
+}
+
+.lb-cp-out {
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.lb-cp-foot {
+  padding: 5px 12px 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.lb-cp-foot .ui-btn {
+  font-size: 13px;
+}
+
+.lb-cp-note {
+  margin: 0;
+  padding: 12px;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+/* 批量打标签：读所选题目已有标签时的占位；去标签的框里不出现「新建」 */
+.lb-picker-wait {
+  width: 264px;
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+/* ---------- 管理章节弹窗 ---------- */
+.lb-cm-new {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lb-cm-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-cm-list,
+.lb-cm-sub {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lb-cm-sub {
+  padding-left: 24px;
+}
+
+.lb-cm-row,
+.lb-cm-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lb-cm-row--top {
+  font-weight: 700;
+}
+
+.lb-cm-add {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-left: 24px;
+  padding: 4px 0;
+}
+
+.lb-cm-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-cm-count {
+  color: var(--mute);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.lb-cm-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 400;
+}
+
+.lb-problem {
+  grid-column: 1 / -1;
+  margin: 4px 0 6px;
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.5;
 }

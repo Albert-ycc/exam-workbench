@@ -82,6 +82,14 @@
   outline-offset: -2px;
 }
 
+.lb-types-foot {
+  margin-top: 6px;
+}
+
+.lb-types-foot .ui-btn {
+  font-size: 13px;
+}
+
 .lb-sub button {
   height: 27px;
   padding-left: 24px;
@@ -166,7 +174,7 @@
 .lb-thead,
 .lb-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) minmax(170px, 250px) 132px;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(170px, 250px) 140px;
   column-gap: 20px;
 }
 
@@ -183,6 +191,33 @@
 
 .lb-thead > span:last-child {
   text-align: right;
+}
+
+/* 勾选了题目：表头文字换成操作条，行不会因此挪位 */
+.lb-thead.is-bulk {
+  background: var(--bb-bg);
+  border-bottom-color: var(--bb);
+}
+
+.lb-bulk {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.lb-bulk-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lb-bulk-ops {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .lb-list {

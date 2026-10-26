@@ -1,0 +1,334 @@
+/* 试卷库的分类栏、行内归类信息、批量操作条、小框。方向 C：发丝线、蓝黑选中、中性样式；红只用于删除确认与错误。
+   分类栏的行照试题库左栏的 lb-types（30px 高、发丝线分隔、选中蓝黑底白字、份数用宋体 <em>）。 */
+
+/* ---------- 分类栏 ---------- */
+.pp-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+.pp-rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ink);
+}
+.pp-rail-title {
+  margin: 0;
+  font: 700 14px var(--song);
+  letter-spacing: 1px;
+}
+.pp-rail-head .ui-btn {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+.pp-cats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pp-cat {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid #efefec;
+  color: var(--ink-2);
+}
+.pp-cat-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.pp-cat-main:hover:not(:disabled) {
+  background: transparent;
+}
+.pp-cat-main > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-cat-main em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 14px var(--song);
+}
+.pp-cat-main:focus-visible {
+  outline-offset: -2px;
+}
+/* 操作按钮的位置所有行都留着，份数才对得齐 */
+.pp-cat-ops {
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+}
+.pp-cat:hover:not(.is-on) {
+  background: var(--tint);
+  color: var(--ink);
+}
+.pp-cat.is-on {
+  background: var(--bb);
+  color: #fff;
+}
+.pp-cat.is-on .pp-cat-main {
+  font-weight: 700;
+}
+.pp-cat.is-on em {
+  color: #fff;
+}
+.pp-cat.is-zero {
+  color: var(--mute);
+}
+.pp-cat.is-zero em {
+  color: #a3a59f;
+}
+.pp-cat.is-on .ui-icon-btn {
+  color: #fff;
+}
+.pp-cat.is-on .ui-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.pp-cat.is-on .ui-icon-btn:focus-visible {
+  outline-color: #fff;
+}
+
+/* ---------- 行内：所属分类与标签 ---------- */
+/* 一行放下：放不下的标签由 MetaLine 收进「+N」，不换行，行高不被撑开 */
+.pp-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+.pp-cat-label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  max-width: 12em;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.pp-cat-label svg {
+  flex: 0 0 auto;
+  color: var(--mute);
+}
+.pp-cat-label > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-chip {
+  display: inline-block;
+  flex: 0 0 auto;
+  max-width: 12em;
+  padding: 0 6px;
+  border: 1px solid var(--rule-2);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pp-chip--more {
+  border-color: var(--rule);
+  color: var(--mute);
+}
+
+/* ---------- 标签条 ---------- */
+/* 一行：标签 · 一排标签 · 更多（共 N 个）· 清除 · 管理标签。TagFilter 的外壳与标题行拆成平铺的子项，再用 order 排位；
+   标签多了默认只显示一行，展开后最多三行再滚动 */
+.pp-tagbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0 24px 12px;
+}
+.pp-tagbar .cf-block,
+.pp-tagbar .cf-head {
+  display: contents;
+}
+.pp-tagbar .cf-title {
+  order: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  line-height: 28px;
+}
+.pp-tagbar .cf-search {
+  display: none; /* 标签多时 TagFilter 带搜索框：收起时只有一行，不放；展开后再出现 */
+  order: 1;
+  flex: 0 0 168px;
+}
+.pp-tagbar.is-expanded .cf-search {
+  display: flex;
+}
+/* 标签块的外层 div 没有类名：靠它直接包着 .cf-chips 认出来 */
+.pp-tagbar div:has(> .cf-chips) {
+  order: 2;
+  flex: 1;
+  min-width: 0;
+  max-height: 28px;
+  overflow: hidden;
+}
+.pp-tagbar.is-expanded div:has(> .cf-chips) {
+  max-height: 96px;
+  overflow: auto;
+}
+/* 收起时选中的标签顶到最前，免得被挤到看不见的第二行 */
+.pp-tagbar:not(.is-expanded) .cf-chips > li:has(> .is-on) {
+  order: -1;
+}
+.pp-tagbar .cf-note {
+  order: 2;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  line-height: 28px;
+}
+.pp-tagbar .pp-tag-more {
+  order: 3;
+  flex: 0 0 auto;
+  height: 28px;
+}
+.pp-tagbar .cf-clear {
+  order: 4;
+  flex: 0 0 auto;
+  height: 28px;
+}
+.pp-tagbar .cf-foot {
+  order: 5;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+}
+.pp-tagbar--empty {
+  align-items: center;
+}
+.pp-tag-label {
+  font: 700 14px/28px var(--song);
+  letter-spacing: 1px;
+}
+.pp-tag-note {
+  color: var(--mute);
+  font-size: 13px;
+  line-height: 28px;
+}
+
+/* ---------- 批量操作条 ---------- */
+/* 替换表头文字（表头那一行高度不变），与试题库的 lb-bulk 同款；勾选框仍在表头第一格 */
+.pp-thead.is-bulk {
+  border-bottom-color: var(--bb);
+  background: var(--bb-bg);
+}
+.pp-bulk {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.pp-bulk-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pp-bulk-ops {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ---------- 行上「⋯」弹出的小框 ---------- */
+.pp-ops {
+  position: relative;
+}
+.pp-anchor {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: -12px;
+  pointer-events: none;
+}
+.pp-pop {
+  min-width: 200px;
+  max-width: 280px;
+  padding: 4px 0;
+}
+.pp-move {
+  display: flex;
+  flex-direction: column;
+}
+.pp-move-list {
+  max-height: 252px;
+  overflow: auto;
+}
+.pp-pop-item[aria-pressed='true'] {
+  font-weight: 700;
+}
+.pp-pop-item svg {
+  flex: 0 0 auto;
+  color: var(--bb);
+}
+.pp-move-empty {
+  padding: 4px 12px 8px;
+  color: var(--mute);
+  font-size: 13px;
+}
+.pp-move-empty p {
+  margin: 0 0 4px;
+}
+
+/* ---------- 分类弹窗 ---------- */
+.pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.pp-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pp-name-row .ui-input {
+  flex: 1;
+  min-width: 0;
+}
+.pp-problem {
+  margin: 0;
+  color: var(--red);
+  font-size: 13px;
+}

@@ -19,6 +19,8 @@ import type {
   VersionSummary
 } from '@shared/domain'
 import { MAX_NUMBER_COUNT, normalizeScore, structureOf } from '../../shared/numbering.ts'
+import { copyTags, tagsOf } from '../tags.ts'
+import { assertCategory } from './classify.ts'
 
 interface PaperRow {
   id: number
@@ -26,6 +28,7 @@ interface PaperRow {
   draft_json: string
   created_at: string
   updated_at: string
+  category_id: number | null
 }
 
 interface VersionRow {
@@ -164,10 +167,15 @@ export function isDraftDirty(db: DatabaseSync, paperId: number): boolean {
   return !latest || snapshotJson(row.title, parseDraft(row.draft_json)) !== latest.snapshot_json
 }
 
-export function createPaper(db: DatabaseSync, title: string): number {
+// categoryId：在某个分类下新建时直接归入（分类不存在时报错）
+export function createPaper(db: DatabaseSync, title: string, options: { categoryId?: number | null } = {}): number {
   const name = cleanTitle(title) || '未命名试卷'
+  const categoryId = options.categoryId ?? null
+  if (categoryId !== null) assertCategory(db, categoryId)
   const time = now()
-  const result = db.prepare('INSERT INTO papers (title, draft_json, created_at, updated_at) VALUES (?, ?, ?, ?)').run(name, JSON.stringify({ sections: [] }), time, time)
+  const result = db
+    .prepare('INSERT INTO papers (title, draft_json, created_at, updated_at, category_id) VALUES (?, ?, ?, ?, ?)')
+    .run(name, JSON.stringify({ sections: [] }), time, time, categoryId)
   return Number(result.lastInsertRowid)
 }
 
@@ -178,13 +186,16 @@ export function listPapers(db: DatabaseSync): PaperSummary[] {
        FROM papers p ORDER BY p.updated_at DESC`
     )
     .all() as unknown as (PaperRow & { latest_no: number | null })[]
+  const tags = tagsOf(db, 'paper', rows.map((r) => r.id))
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
     latestVersionNo: r.latest_no,
     draftDirty: isDraftDirty(db, r.id),
     structure: summarizeStructure(parseDraft(r.draft_json).sections),
-    updatedAt: r.updated_at
+    updatedAt: r.updated_at,
+    categoryId: r.category_id,
+    tags: tags.get(r.id) ?? []
   }))
 }
 
@@ -320,7 +331,7 @@ export function restoreVersion(db: DatabaseSync, paperId: number, versionId: num
   })
 }
 
-// 另存为新试卷：从当前草稿或某个历史版本复制出一份新试卷，新试卷没有版本，从 v1 开始
+// 另存为新试卷：从当前草稿或某个历史版本复制出一份新试卷，新试卷没有版本，从 v1 开始；分类与标签一起复制
 export function duplicatePaper(db: DatabaseSync, sourcePaperId: number, options: { versionId?: number; title?: string } = {}): number {
   return transaction(db, () => {
     const source = paperRow(db, sourcePaperId)
@@ -332,8 +343,9 @@ export function duplicatePaper(db: DatabaseSync, sourcePaperId: number, options:
       title = version.snapshot.title
       draft = { sections: normalizeSections(version.snapshot.sections) }
     }
-    const id = createPaper(db, options.title?.trim() ? options.title : `${title}（副本）`)
+    const id = createPaper(db, options.title?.trim() ? options.title : `${title}（副本）`, { categoryId: source.category_id })
     db.prepare('UPDATE papers SET draft_json = ? WHERE id = ?').run(JSON.stringify(draft), id)
+    copyTags(db, 'paper', sourcePaperId, id)
     return id
   })
 }
