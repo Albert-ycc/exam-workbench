@@ -22,16 +22,24 @@ let browser: CollectBrowser | null = null
 let db: DatabaseSync | null = null
 let dataDir = ''
 
+// 安装程序更新前用它请正在运行的程序保存并退出：带这个参数再启动一份，单实例通道把参数转给已在跑的那份，本进程不开窗口
+const QUIT_FLAG = '--quit'
+const quitRequested = process.argv.includes(QUIT_FLAG)
 // 自检与自动化测试可以多开，正常使用保持单实例
 const gotLock = selftestMode || process.env.EWB_E2E ? true : app.requestSingleInstanceLock()
-if (!gotLock) {
+if (!gotLock || quitRequested) {
+  // 没拿到锁：已有一份在跑，参数（含 --quit）已经转交给它；拿到了锁却带着 --quit：没有程序在跑，没什么可退的
   app.quit()
 } else {
   bootstrap()
 }
 
 function bootstrap(): void {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    if (argv.includes(QUIT_FLAG)) {
+      app.quit()
+      return
+    }
     if (!mainWindow) return
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
@@ -55,6 +63,9 @@ function bootstrap(): void {
       .finally(() => {
         db?.close()
         db = null
+        // 生成 PDF、量字宽用的隐藏窗口直接销毁，不等它们自己关；退出再卡住（渲染进程没响应）就 5 秒后强制结束，不留后台进程
+        for (const win of BrowserWindow.getAllWindows()) if (!win.isDestroyed()) win.destroy()
+        setTimeout(() => app.exit(0), 5000)
         app.quit()
       })
   })
@@ -120,9 +131,11 @@ function createWindow(): void {
   })
 
   win.once('ready-to-show', () => win.show())
+  // 主窗口关了程序就退出：导出用的隐藏窗口可能还开着，不能靠 window-all-closed，否则程序留在后台，安装程序会报「正在运行」
   win.on('closed', () => {
     mainWindow = null
     browser = null
+    app.quit()
   })
   // 界面本身不跳转；界面里的外部链接交给系统浏览器
   // file: 页面的 origin 都是 "null"，不能按 origin 比较；开发模式只放行开发服务器自身
