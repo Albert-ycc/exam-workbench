@@ -15,8 +15,7 @@
 import { useId, useMemo, useRef, useState, type FocusEvent } from 'react'
 import { TAG_NAME_MAX, classNameLength, cleanClassName, normalizeClassName, type Tag, type TagRef } from '@shared/classify'
 import { IconPlus, IconSearch } from '../../icons'
-import { errorMessage } from '../library/format'
-import { Button, Checkbox, TextInput, cx, toast } from '../ui'
+import { Button, Checkbox, TextInput, cx, errorMessage, toast } from '../ui'
 import './classify.css'
 
 export interface TagPickerProps {

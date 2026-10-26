@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { openDatabase, SCHEMA_VERSION } from '../src/main/db.ts'
+import { DatabaseSync } from 'node:sqlite'
+import { DB_FILE, migrateTo, openDatabase, SCHEMA_VERSION } from '../src/main/db.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'ewb-db-'))
 const now = new Date().toISOString()
@@ -99,6 +100,39 @@ try {
     raw.prepare("INSERT INTO paper_versions (paper_id, version_no, origin, snapshot_json, created_at) VALUES (?, 7, 'manual', '{}', ?)").run(paperId, now)
     raw.prepare("UPDATE paper_versions SET note = '改' WHERE paper_id = ?").run(paperId)
     raw.close()
+  })
+
+  check('旧库升级：0.3.0 结构（前三次迁移）的库打开后升到最新，数据一条不少，触发器仍在，新表建出', () => {
+    const old = mkdtempSync(join(tmpdir(), 'ewb-db-old-'))
+    try {
+      const raw = new DatabaseSync(join(old, DB_FILE))
+      raw.exec('PRAGMA foreign_keys = ON;')
+      migrateTo(raw, 3)
+      assert.equal((raw.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 3)
+      raw.prepare("INSERT INTO questions (zujuan_qid, question_type, stem_html, fingerprint, created_at) VALUES ('old1', '选择题', '<p>旧题</p>', 'fo1', ?)").run(now)
+      raw.prepare("INSERT INTO papers (title, draft_json, created_at, updated_at) VALUES ('旧卷', '{\"sections\":[]}', ?, ?)").run(now, now)
+      const addV = raw.prepare("INSERT INTO paper_versions (paper_id, version_no, origin, snapshot_json, created_at) VALUES (1, ?, 'manual', '{}', ?)")
+      addV.run(1, now)
+      addV.run(2, now)
+      raw.prepare("INSERT INTO exports (version_id, format, options_json, file_path, created_at) VALUES (1, 'pdf', '{}', 'old.pdf', ?)").run(now)
+      raw.close()
+
+      const upgraded = openDatabase(old)
+      const count = (table: string): number => (upgraded.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n
+      assert.equal((upgraded.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, SCHEMA_VERSION)
+      assert.deepEqual([count('questions'), count('papers'), count('paper_versions'), count('exports')], [1, 1, 2, 1])
+      assert.equal((upgraded.prepare('SELECT kind FROM exports').get() as { kind: string }).kind, 'paper', '旧下载记录补上默认类型')
+      assert.throws(() => upgraded.prepare("UPDATE questions SET stem_html = '改' WHERE id = 1").run(), /只读/)
+      assert.throws(() => upgraded.prepare("UPDATE paper_versions SET note = '改' WHERE version_no = 1").run(), /只增不改/)
+      assert.throws(() => upgraded.prepare('DELETE FROM paper_versions WHERE version_no = 1').run(), /不能单独删除/)
+      for (const table of ['knowledge_points', 'question_knowledge', 'question_difficulty', 'chapters', 'question_chapter', 'tags', 'question_tags', 'paper_tags', 'paper_categories']) {
+        assert.ok(upgraded.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), `缺少新表 ${table}`)
+      }
+      assert.ok(upgraded.prepare("SELECT 1 FROM pragma_table_info('papers') WHERE name = 'category_id'").get(), 'papers 补上分类列')
+      upgraded.close()
+    } finally {
+      rmSync(old, { recursive: true, force: true })
+    }
   })
 
   console.log(`数据库约束测试通过：${passed} 项`)

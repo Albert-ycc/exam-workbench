@@ -2,8 +2,8 @@
 // 纯函数，不依赖 Electron，规则的单元测试都在 scripts/test-export.ts。
 import { ANSWER_SPACE_MM } from '../../shared/export.ts'
 import { editionOf, normalizeExportOptions, type DraftSection, type ExportOptions, type PaperSnapshot } from '../../shared/domain.ts'
-import { answerKeyLabel, fillQuestionNumbers, itemScoreNote, numberItems, numberLabel, paperTotalNote, sectionHeading, sectionScoreNote, structureOf, type NumberedItem, type SectionStructure } from '../../shared/numbering.ts'
-import { blockify, collectImages, el, hasVisibleContent, parseHtml, stripInvalidXmlChars, text, textContent, type ElementNode, type HNode } from './html-tree.ts'
+import { answerKeyLabel, fillQuestionNumbers, hasVisibleContent, itemScoreNote, numberItems, numberLabel, paperTotalNote, sectionHeading, sectionScoreNote, structureOf, type NumberedItem, type SectionStructure } from '../../shared/numbering.ts'
+import { blockify, collectImages, el, hasRenderableContent, parseHtml, stripInvalidXmlChars, text, textContent, type ElementNode, type HNode } from './html-tree.ts'
 import { MAX_IMAGE_HEIGHT_PX, displaySize, parseImageSource } from './image-src.ts'
 
 export const ANSWER_KEY_TITLE = '参考答案'
@@ -112,7 +112,7 @@ function splitParagraph(p: ElementNode): HNode[] {
   let buffer: HNode[] = []
   const flush = (): void => {
     const kept = trimBreaks(buffer)
-    if (hasVisibleContent(kept)) result.push(el('p', p.attrs, kept))
+    if (hasRenderableContent(kept)) result.push(el('p', p.attrs, kept))
     buffer = []
   }
   for (const child of p.children) {
@@ -228,13 +228,14 @@ export function buildExportDocument(snapshot: PaperSnapshot, rawOptions: ExportO
     if (prefix.length > 0) body = prependToFirstParagraph(body, prefix)
 
     let answer: HNode[] | null = null
-    if (showAnswers && n.item.answerHtml == null) missingAnswers.push(numberLabel(n))
-    if (showAnswers && n.item.answerHtml != null) {
-      const nodes = parseContent(n.item.answerHtml, n.firstNo, '答案', n.firstNo)
-      if (hasVisibleContent(nodes)) {
+    // 有没有答案与下载前自检（check.ts）同一口径：shared/numbering.ts 的 hasVisibleContent
+    if (showAnswers) {
+      if (!hasVisibleContent(n.item.answerHtml)) missingAnswers.push(numberLabel(n))
+      else {
+        const nodes = parseContent(n.item.answerHtml!, n.firstNo, '答案', n.firstNo)
         answerCount++
         answer = options.sourcePosition === 'answer' && sourceLabelOf(n) ? [el('p', { 'data-role': 'answer-source' }, [text(`（${sourceLabelOf(n)}）`)]), ...nodes] : nodes
-      } else missingAnswers.push(numberLabel(n))
+      }
     }
     if (answer && options.answerPosition === 'end') answerKey.push({ label: answerKeyLabel(n), nodes: answer })
 

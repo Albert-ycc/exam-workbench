@@ -446,6 +446,7 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
     assert.equal(issueTypes(checkDraft({ sections, targetScore: 90 }, opts(), 'paper')).includes('score-mismatch'), false)
     assert.equal(issueTypes(checkDraft({ sections }, opts(), 'paper')).includes('score-mismatch'), false)
     assert.equal(issueTypes(checkDraft({ sections, targetScore: null }, opts(), 'paper')).includes('score-mismatch'), false)
+    assert.equal(issueTypes(checkDraft({ sections: [section('选择题', items(3, '单选题'))], targetScore: 100 }, opts(), 'paper')).includes('score-mismatch'), false, '整卷一分都没设时只报未设分值，不报「合计 0 分」')
   })
   check('阻止项排在前面，其余按原顺序；blocked 与阻止项一致', () => {
     const sections = [section('选择题', [item('单选题', { originQuestionId: 1 }), item('单选题', { originQuestionId: 1 })]), section('空', [])]

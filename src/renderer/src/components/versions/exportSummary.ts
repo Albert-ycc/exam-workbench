@@ -24,13 +24,18 @@ export function recordSummary(record: ExportRecord): string {
   return record.kind === 'answer-sheet' ? 'A4 答题卡' : optionsSummary(record.options)
 }
 
+// 有题没设分时的说明「3 题未设分」；一题都没设分（总分为空）时不提示，没有值得补的信息
+export function unscoredText(summary: { unscoredCount: number; totalScore: number | null }): string | null {
+  return summary.unscoredCount > 0 && summary.totalScore != null ? `${summary.unscoredCount} 题未设分` : null
+}
+
 // S7：版本列表里的结构摘要「3 个大题 · 21 题 · 100 分」；有题没设分时补一句
 export function structureText(summary: StructureSummary): string {
   if (summary.questionCount === 0) return summary.sectionCount === 0 ? '空白试卷' : `${summary.sectionCount} 个大题 · 还没有题目`
   const parts = [`${summary.sectionCount} 个大题`, `${summary.questionCount} 题`]
   if (summary.totalScore != null) parts.push(`${formatScore(summary.totalScore)} 分`)
-  const unscored = summary.unscoredCount > 0 && summary.totalScore != null ? `（${summary.unscoredCount} 题未设分）` : ''
-  return `${parts.join(' · ')}${unscored}`
+  const unscored = unscoredText(summary)
+  return `${parts.join(' · ')}${unscored ? `（${unscored}）` : ''}`
 }
 
 export const editionLabel = editionOf

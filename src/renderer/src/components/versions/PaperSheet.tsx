@@ -1,6 +1,6 @@
 // 只读渲染一份试卷快照（版本预览用）：版面、大题序号、题号、分值说明与编辑器同一套算法
 import type { DraftSection } from '@shared/domain'
-import { itemScoreNote, numberItems, numberLabel, paperTotalNote, sectionHeading, sectionScoreNote, structureOf } from '@shared/numbering'
+import { hasVisibleContent, itemScoreNote, numberItems, numberLabel, paperTotalNote, sectionHeading, sectionScoreNote, structureOf } from '@shared/numbering'
 import { Tag } from '../ui'
 import MemoQuestionHtml from '../editor/MemoQuestionHtml'
 
@@ -36,9 +36,9 @@ export default function PaperSheet({ title, sections, showAnswers }: Props) {
                     {n ? numberLabel(n) : ''}
                   </span>
                   <MemoQuestionHtml html={item.stemHtml} firstNo={firstNo} />
-                  {showAnswers && item.answerHtml != null && (
+                  {showAnswers && hasVisibleContent(item.answerHtml) && (
                     <div className="ed-answer-view">
-                      <MemoQuestionHtml html={item.answerHtml} firstNo={firstNo} />
+                      <MemoQuestionHtml html={item.answerHtml ?? ''} firstNo={firstNo} />
                     </div>
                   )}
                 </div>

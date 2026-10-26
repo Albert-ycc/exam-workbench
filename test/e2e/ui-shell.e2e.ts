@@ -6,12 +6,11 @@
 // 全程不访问外网：内置浏览器会话的 https 请求由本地桩页面应答，首次启动进采集的那一次用 DNS 屏蔽。
 // 用法：node test/e2e/ui-shell.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
-import { buildTo, ROOT } from '../../scripts/e2e/app.ts'
+import { join } from 'node:path'
+import type { ElectronApplication, Page } from 'playwright'
+import { buildTo, launchApp, type LaunchedApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
 import { sampleDraft } from '../../scripts/test-export-fixtures.ts'
 
@@ -19,20 +18,7 @@ const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-ui-shell-'))
 mkdirSync(evidence, { recursive: true })
 buildTo('out-uibase')
 
-async function launch(dataDir: string, userDataDir: string): Promise<{ app: ElectronApplication; window: Page }> {
-  mkdirSync(userDataDir, { recursive: true })
-  writeFileSync(join(userDataDir, 'config.json'), JSON.stringify({ dataDir }))
-  const executablePath = createRequire(import.meta.url)('electron') as unknown as string
-  const app = await electron.launch({
-    executablePath,
-    // 所有域名解析失败：即使进了采集页也不会出网
-    args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1', join(resolve(ROOT, 'out-uibase'), 'main/index.js')],
-    env: { ...process.env, EWB_USER_DATA: userDataDir, EWB_E2E: '1' }
-  })
-  const window = await app.firstWindow()
-  await window.waitForLoadState('domcontentloaded')
-  return { app, window }
-}
+const launch = (dataDir: string, userDataDir: string): Promise<LaunchedApp> => launchApp({ outDir: 'out-uibase', dataDir, userDataDir })
 
 // 采集页的内置浏览器：用本地桩页面应答组卷网，页头不出现「打开失败」
 async function stubCollect(app: ElectronApplication): Promise<void> {

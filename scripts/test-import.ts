@@ -3,12 +3,12 @@
 // 去重、图片下载、入库提交、试题库查询用临时数据库与假的下载函数。
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire, stripTypeScriptTypes } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright'
-import { assetNameFromUrl } from '../src/main/assets.ts'
+import { assetNameFromUrl, saveAsset } from '../src/main/assets.ts'
 import { openDatabase } from '../src/main/db.ts'
 import { saveQuestionMeta } from '../src/main/library/classify.ts'
 import { commitPages } from '../src/main/library/commit.ts'
@@ -564,6 +564,31 @@ await check('按文件头判断格式；非图片、超大、非组卷网域名�
   assert.equal((await downloadImage(data, ok.fetcher))?.ext, 'png')
 })
 
+await check('data: 地址里有裸 % 或解不开的转义：按这一张图下载失败处理，不抛异常', async () => {
+  const none = makeFetcher().fetcher
+  const bare = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="10"></svg>'
+  assert.equal(await downloadImage(bare, none), null)
+  const escaped = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22%3E%3C/svg%3E'
+  assert.equal((await downloadImage(escaped, none))?.ext, 'svg')
+})
+
+await check('地址栏输入：只有 scheme:// 才算带协议，host:port 补 https://，非网页协议拒绝', () => {
+  // browser.ts 依赖 Electron 无法在 node 里直接导入，取出函数源码单独求值
+  const source = readFileSync(join(ROOT, 'src/main/browser.ts'), 'utf8')
+  const start = source.indexOf('export function normalizeAddress')
+  const body = source.slice(start, source.indexOf('\n}\n', start) + 3).replace('export ', '')
+  const normalizeAddress = new Function(`${stripTypeScriptTypes(body)}; return normalizeAddress`)() as (input: string) => string | null
+  assert.equal(normalizeAddress('example.com:8080/x'), 'https://example.com:8080/x')
+  assert.equal(normalizeAddress('localhost:3000'), 'https://localhost:3000/')
+  assert.equal(normalizeAddress('zujuan.xkw.com'), 'https://zujuan.xkw.com/')
+  assert.equal(normalizeAddress('http://zujuan.xkw.com/a'), 'http://zujuan.xkw.com/a')
+  assert.equal(normalizeAddress('  HTTPS://Zujuan.xkw.com  '), 'https://zujuan.xkw.com/')
+  assert.equal(normalizeAddress('javascript:alert(1)'), null)
+  assert.equal(normalizeAddress('file:///etc/passwd'), null)
+  assert.equal(normalizeAddress('weixin://x'), null)
+  assert.equal(normalizeAddress('   '), null)
+})
+
 console.log('入库：预览、去重、提交')
 const dataDir = mkdtempSync(join(tmpdir(), 'ewb-import-data-'))
 mkdirSync(join(dataDir, 'assets'), { recursive: true })
@@ -675,6 +700,57 @@ try {
     withQid.questions = withQid.questions.slice(0, 3)
     const third = await preparePage(withQid, 'https://zujuan.xkw.com/3p9.html', { db, fetchImage: fetchOk, seen: new SeenQuestions(), pageIndex: 0 })
     assert.ok(third.questions.every((q) => q.duplicate))
+  })
+
+  await check('无编号题的指纹不随图片下载成败变化：同一页先失败后成功两次入库只有一道题', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ewb-import-fp-'))
+    mkdirSync(join(dir, 'assets'))
+    const fresh = openDatabase(dir)
+    try {
+      const page = (): ExtractedPage => ({
+        kind: 'paper', url: 'https://zujuan.xkw.com/2p9.html', title: 'T', origin: null, declaredCount: 1, verification: false, questionCount: 1,
+        images: ['https://staticzujuan.xkw.com/a.png?v=1'], diagnostics: [],
+        questions: [{ qid: null, questionType: '填空题', sourceLabel: 's', sectionTitle: '', order: 0, numberCount: 1, stemHtml: '<p>如图，求面积 <img src="ewb-pending:0"></p>', stemText: '如图，求面积 [图]', answerHtml: null, start: null, knowledge: [], difficulty: null, difficultyLabel: '' }]
+      }) as ExtractedPage
+      const failing: ImageFetcher = async () => ({ status: 404, contentType: '', bytes: new Uint8Array() })
+      const fetchers = [failing, makeFetcher().fetcher]
+      const prints: string[] = []
+      for (const fetchImage of fetchers) {
+        const prepared = await preparePage(page(), 'u', { db: fresh, fetchImage, seen: new SeenQuestions(), pageIndex: 0 })
+        prints.push(prepared.questions[0].fingerprint)
+        commitPages(fresh, dir, [prepared])
+      }
+      assert.equal(prints[0], prints[1])
+      assert.equal(fresh.prepare('SELECT COUNT(*) AS n FROM questions').get()!.n, 1)
+      // 反向顺序：先成功后失败也是同一道
+      const reverse = await preparePage(page(), 'u', { db: fresh, fetchImage: failing, seen: new SeenQuestions(), pageIndex: 0 })
+      assert.equal(reverse.questions[0].fingerprint, prints[0])
+      assert.equal(reverse.questions[0].duplicate, true)
+    } finally {
+      fresh.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  await check('保存图片：原子写入，预置的半截文件被修复成完整大小', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ewb-import-asset-'))
+    mkdirSync(join(dir, 'assets'))
+    const fresh = openDatabase(dir)
+    try {
+      const bytes = Buffer.concat([PNG_HEAD, Buffer.alloc(5000, 7)])
+      const name = `${createHash('sha256').update(bytes).digest('hex')}.png`
+      const file = join(dir, 'assets', name)
+      writeFileSync(file, bytes.subarray(0, 100))
+      assert.equal(saveAsset(fresh, dir, bytes, 'png'), name)
+      assert.equal(readFileSync(file).length, bytes.length)
+      assert.ok(readFileSync(file).equals(bytes))
+      assert.deepEqual(readdirSync(join(dir, 'assets')), [name], '不留临时文件')
+      saveAsset(fresh, dir, bytes, 'png') // 已完整时不重写，同样不留临时文件
+      assert.deepEqual(readdirSync(join(dir, 'assets')), [name])
+    } finally {
+      fresh.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   await check('危险图片地址与伪造引用：不下载、不崩溃，提交时图片被去掉', async () => {

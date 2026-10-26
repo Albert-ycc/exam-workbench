@@ -6,14 +6,14 @@ import type { PaperCategory, Tag, TagRef } from '@shared/classify'
 import type { PaperSummary } from '@shared/domain'
 import { IconEdit, IconPlus, IconSearch } from '../icons'
 import { TagManagerModal } from '../components/classify'
-import { clip, errorMessage } from '../components/library/format'
 import { paperTrash, useExecutedDeletes, useHiddenPapers } from '../components/library/paperTrash'
 import { BulkBar } from '../components/papers/BulkBar'
 import { CategoryDialog } from '../components/papers/CategoryDialog'
 import { CategoryRail, isPaperView, type PaperView } from '../components/papers/CategoryRail'
 import { PaperRow } from '../components/papers/PaperRow'
 import { TagBar } from '../components/papers/TagBar'
-import { Button, Checkbox, ConfirmDialog, EmptyState, Modal, TextInput, toast, usePersistentState, type EmptyStateProps } from '../components/ui'
+import { Button, Checkbox, ConfirmDialog, EmptyState, Modal, TextInput, clip, errorMessage, toast, usePersistentState, type EmptyStateProps } from '../components/ui'
+import { TITLE_MAX } from '../components/papers/titleMax'
 import './PapersPage.css'
 
 interface Props {
@@ -169,16 +169,19 @@ export default function PapersPage({ onOpen }: Props) {
   }
 
   // ---------- 分类 ----------
-  const moveTo = async (ids: number[], categoryId: number | null): Promise<void> => {
+  const moveTo = async (ids: number[], categoryId: number | null): Promise<boolean> => {
+    let moved = false
     try {
       await window.workbench.papers.setCategory(ids, categoryId)
       const target = categoryId === null ? '「未分类」' : `分类「${clip(categoryName(categoryId) ?? '', 20)}」`
       const what = ids.length === 1 ? `「${clip(papers?.find((p) => p.id === ids[0])?.title ?? '', 20)}」` : ` ${ids.length} 份试卷`
       toast.show(`已将${what}移到${target}`)
+      moved = true
     } catch (e) {
       toast.error(`移到分类失败：${errorMessage(e)}`)
     }
     await load()
+    return moved
   }
 
   const submitCategory = async (raw: string): Promise<void> => {
@@ -389,8 +392,8 @@ export default function PapersPage({ onOpen }: Props) {
                   tags={liveTags}
                   tagUse={tagUse}
                   onMove={(id) => {
-                    void moveTo(chosenIds, id)
-                    setSelected(new Set()) // 移完就整理好了，不留着勾选
+                    // 移成功才清勾选；失败留着，用户不用重新点选
+                    void moveTo(chosenIds, id).then((moved) => moved && setSelected(new Set()))
                   }}
                   onToggleTag={toggleTag(chosenIds)}
                   onCreateTag={createTag}
@@ -458,6 +461,7 @@ export default function PapersPage({ onOpen }: Props) {
             <TextInput
               value={name}
               onChange={setName}
+              maxLength={TITLE_MAX}
               placeholder="例如：七年级数学第一单元测试"
               data-autofocus=""
               onKeyDown={(e) => {

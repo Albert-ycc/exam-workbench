@@ -294,6 +294,19 @@ try {
     assert.match(xml, /一、选择题（每题 3 分）/)
     assert.equal((xml.match(/<w:drawing>/g) ?? []).length, 2, '公式图与数轴图')
   })
+  await check('所有行都没有单元格的表不输出（没有 <w:tr> 的 <w:tbl> Word 打不开）；有内容的表照旧', async () => {
+    const snap = (stem: string): PaperSnapshot => ({ title: '空表', sections: [{ id: 's', title: '解答题', items: [{ id: 'i', originQuestionId: null, sourceLabel: '', questionType: '解答题', numberCount: 1, stemHtml: stem, answerHtml: null }] }] })
+    const xmlOf = async (stem: string): Promise<string> => {
+      const file = join(root, `empty-${Math.random().toString(36).slice(2)}.docx`)
+      writeFileSync(file, await buildDocx(buildExportDocument(snap(stem), { ...DEFAULT_EXPORT_OPTIONS, format: 'docx' }), natural))
+      return execFileSync('unzip', ['-p', file, 'word/document.xml'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    }
+    const empty = await xmlOf('<p>题干</p><table data-role="bordered"><tr></tr><tr></tr></table>')
+    assert.equal((empty.match(/<w:tbl>/g) ?? []).length, 0)
+    const mixed = await xmlOf('<table data-role="bordered"><tr></tr><tr><td>甲</td></tr></table>')
+    assert.equal((mixed.match(/<w:tbl>/g) ?? []).length, 1)
+    assert.equal((mixed.match(/<w:tr>|<w:tr /g) ?? []).length, 1, '空行被过滤')
+  })
   await check('同一份内容多次生成，正文 XML 完全一致（重新下载与首次下载对应）', async () => {
     const first = await docxXml({ answerPosition: 'end', answerArea: true })
     const second = await docxXml({ answerPosition: 'end', answerArea: true })
@@ -545,6 +558,28 @@ try {
     assert.equal(pickTargetPath('/d', 'y.pdf', (p) => taken.has(p), () => false), '/d/y.pdf')
   })
 
+  console.log('解析与设置的边界输入')
+  check('有 < 无 > 的长文本线性时间解析；5000 层嵌套不栈溢出', () => {
+    const long = 'x<y '.repeat(20_000)
+    const started = performance.now()
+    const nodes = parseHtml(long)
+    assert.ok(performance.now() - started < 100, `解析 80KB 耗时 ${Math.round(performance.now() - started)}ms`)
+    assert.equal(textContent(nodes), long)
+    const deep = '<div>'.repeat(5000) + '内层' + '</div>'.repeat(5000)
+    assert.doesNotThrow(() => serializeNodes(parseHtml(deep)))
+    assert.match(serializeNodes(parseHtml(deep)), /内层/)
+    assert.equal(serializeNodes(parseHtml('<p>a<b>粗</b> 1 < 2 且 3 > 2</p>')), '<p>a<b>粗</b> 1 &lt; 2 且 3 &gt; 2</p>')
+  })
+  check('设置文件内容为 null、数组、数字时当作没有设置', () => {
+    const file = join(root, 'weird-settings.json')
+    const downloads = join(root, 'Downloads')
+    mkdirSync(downloads, { recursive: true })
+    for (const body of ['null', '[]', '123', '"x"', 'true']) {
+      writeFileSync(file, body)
+      assert.deepEqual(readExportDefaults(file, downloads), { options: DEFAULT_EXPORT_OPTIONS, directory: downloads }, body)
+    }
+  })
+
   console.log('设置记忆')
   check('首次使用取默认值；写入后读回；保存位置消失时回到默认；文件损坏时回到默认', () => {
     const file = join(root, 'settings', 'export-settings.json')
@@ -718,6 +753,42 @@ try {
     const text = readFileSync(r.filePath, 'utf8')
     assert.match(text, /生成途中改过/, '文件是按存下的版本（含这次修改）生成的')
     assert.match(getVersionText(live), /生成途中改过/)
+  })
+  await check('生成期间草稿被改、第二次生成又失败：不留版本、下载记录和临时文件', async () => {
+    const racy = createPaper(db, '改后失败试卷')
+    saveDraft(db, racy, draft)
+    const edited = structuredClone(draft)
+    edited.sections[2].items[0].stemHtml = '<p>第二次生成前改过</p>'
+    beforeRender = () => {
+      saveDraft(db, racy, edited)
+      beforeRender = () => {
+        throw new Error('第二次生成失败（模拟）')
+      }
+    }
+    await assert.rejects(service.exportPaper({ paperId: racy, kind: 'paper', options: student, directory: outDir }), /第二次生成失败/)
+    assert.equal(listVersions(db, racy).length, 0, '版本随事务撤销，没有孤儿版本')
+    assert.equal(readdirSync(outDir).filter((n) => n.startsWith('.ewb-')).length, 0, '没有残留的临时文件')
+    const ok = await service.exportPaper({ paperId: racy, kind: 'paper', options: student, directory: outDir })
+    assert.deepEqual([ok.versionNo, ok.createdVersion], [1, true], '之后重新下载从 v1 开始')
+  })
+  await check('生成期间草稿一直在变：重试三次后报错，不留版本与临时文件', async () => {
+    const busy = createPaper(db, '一直在改试卷')
+    saveDraft(db, busy, draft)
+    let n = 0
+    const arm = (): void => {
+      beforeRender = () => {
+        const next = structuredClone(draft)
+        next.sections[2].items[0].stemHtml = `<p>第 ${++n} 次改动</p>`
+        saveDraft(db, busy, next)
+        arm()
+      }
+    }
+    arm()
+    await assert.rejects(service.exportPaper({ paperId: busy, kind: 'paper', options: student, directory: outDir }), /生成期间试卷内容一直在变/)
+    beforeRender = null
+    assert.equal(n, 3, '最多生成三次')
+    assert.equal(listVersions(db, busy).length, 0)
+    assert.equal(readdirSync(outDir).filter((n) => n.startsWith('.ewb-')).length, 0)
   })
   await check('缺答案提示：下载结果与下载前检查都列出没有答案的题；多余的配置字段不进下载记录与设置文件', async () => {
     const teacher = { ...student, answerPosition: 'end' as const }

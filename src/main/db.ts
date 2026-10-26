@@ -197,6 +197,22 @@ const MIGRATIONS: string[] = [
 
 export const SCHEMA_VERSION = MIGRATIONS.length
 
+// 从当前结构版本逐次迁移到 target；只给 openDatabase 和测试（造旧版本的库）用
+export function migrateTo(db: DatabaseSync, target: number): void {
+  const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+  for (let version = current; version < target; version++) {
+    db.exec('BEGIN')
+    try {
+      db.exec(MIGRATIONS[version])
+      db.exec(`PRAGMA user_version = ${version + 1}`)
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+}
+
 export function openDatabase(dataDir: string): DatabaseSync {
   const db = new DatabaseSync(join(dataDir, DB_FILE))
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;')
@@ -205,17 +221,11 @@ export function openDatabase(dataDir: string): DatabaseSync {
     db.close()
     throw new Error(`数据目录里的数据库由更新版本的组卷工作台创建（结构版本 ${current}），当前程序只支持到 ${SCHEMA_VERSION}，请升级程序后再打开。`)
   }
-  for (let version = current; version < SCHEMA_VERSION; version++) {
-    db.exec('BEGIN')
-    try {
-      db.exec(MIGRATIONS[version])
-      db.exec(`PRAGMA user_version = ${version + 1}`)
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      db.close()
-      throw error
-    }
+  try {
+    migrateTo(db, SCHEMA_VERSION)
+  } catch (error) {
+    db.close()
+    throw error
   }
   return db
 }

@@ -143,7 +143,7 @@ const LONG_TITLES = [
   ids.forEach((id, i) => db.prepare('UPDATE source_papers SET title = ? WHERE id = ?').run(LONG_TITLES[i], id))
   db.close()
 }
-const [qChoice, qBlank, qCalc, qSolve, qCloze, qWriting] = questionIds
+const [qChoice, qBlank, qCalc, qSolve, qCloze] = questionIds
 // 样例数据里的 PNG 字节本身是损坏的（CRC 与压缩数据都不对），界面上只会显示破图；
 // 这里把数据目录里那个文件换成同尺寸的有效 PNG，让截图和图片相关的断言反映真实使用
 for (const name of readdirSync(join(dataDir, 'assets')).filter((n) => n.endsWith('.png'))) writeFileSync(join(dataDir, 'assets', name), solidPng(96, 48, [196, 214, 242]))

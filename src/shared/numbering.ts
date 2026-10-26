@@ -26,13 +26,24 @@ export interface NumberedItem {
 // 一个题目块最多占的题号数：防止异常数据展开题号时占满内存
 export const MAX_NUMBER_COUNT = 500
 
-// 全卷连续编号：每个题目块占 numberCount 个题号
+// 一个题目块占的题号数：不是 ≥1 的数按 1，小数取整，超过上限按上限。题号展开、分值说明、答题卡框头都用它，不各自读 numberCount
+export function numberCountOf(item: Pick<PaperItem, 'numberCount'>): number {
+  const n = item.numberCount
+  return typeof n === 'number' && Number.isFinite(n) && n >= 1 ? Math.min(MAX_NUMBER_COUNT, Math.floor(n)) : 1
+}
+
+// 一个题目块占的全部题号：firstNo 到 lastNo
+export function blockNos(n: Pick<NumberedItem, 'firstNo' | 'lastNo'>): number[] {
+  return Array.from({ length: n.lastNo - n.firstNo + 1 }, (_, k) => n.firstNo + k)
+}
+
+// 全卷连续编号：每个题目块占 numberCountOf(item) 个题号
 export function numberItems(sections: DraftSection[]): NumberedItem[] {
   const result: NumberedItem[] = []
   let next = 1
   sections.forEach((section, sectionIndex) => {
     for (const item of section.items) {
-      const count = Math.min(MAX_NUMBER_COUNT, Math.max(1, item.numberCount || 1))
+      const count = numberCountOf(item)
       result.push({ item, sectionIndex, firstNo: next, lastNo: next + count - 1 })
       next += count
     }
@@ -46,9 +57,7 @@ export function numberLabel(n: NumberedItem): string {
 }
 
 export function answerKeyLabel(n: NumberedItem): string {
-  const nos: number[] = []
-  for (let i = n.firstNo; i <= n.lastNo; i++) nos.push(i)
-  return nos.join('、')
+  return blockNos(n).join('、')
 }
 
 // 把内容里的小题号占位符替换成实际题号（字符串处理，主进程与界面都能用）
@@ -56,11 +65,13 @@ export function fillQuestionNumbers(html: string, firstNo: number): string {
   return html.replace(/<span data-ewb-qno="(\d+)"><\/span>/g, (_m, k: string) => String(firstNo + Number(k)))
 }
 
-// 内容是否有看得见的东西：有文字或有图片。只有空段落、空白、&nbsp; 的答案视为没有答案（自检与下载同一口径）
+// 内容是否有看得见的东西：有文字或有图片。只有空段落、空白与 &nbsp; 这类空格实体的内容视为没有内容。
+// 自检（export/check.ts）、导出时判断缺答案（export/document.ts）、界面的缺答案标记都用这一个函数，不另写一套
+const SPACE_ENTITY = /&(?:nbsp|ensp|emsp|thinsp|#160|#8194|#8195|#8201|#12288|#x(?:a0|2002|2003|2009|3000));/gi
 export function hasVisibleContent(html: string | null | undefined): boolean {
   if (!html) return false
   if (/<img\b/i.test(html)) return true
-  const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+  const text = html.replace(/<[^>]*>/g, '').replace(SPACE_ENTITY, ' ')
   return text.trim().length > 0
 }
 
@@ -119,7 +130,7 @@ export function structureOf(sections: DraftSection[]): PaperStructure {
     const missingAnswerNos: number[] = []
     for (const n of entries) {
       const score = effectiveScore(n.item, section)
-      const nos = Array.from({ length: n.lastNo - n.firstNo + 1 }, (_, k) => n.firstNo + k)
+      const nos = blockNos(n)
       if (score == null) unscoredNos.push(...nos)
       else {
         totalTenths += toTenths(score) * nos.length
@@ -171,7 +182,7 @@ export function sectionScoreNote(section: SectionStructure): string {
 export function itemScoreNote(item: PaperItem, section: DraftSection): string {
   const score = effectiveScore(item, section)
   if (score == null) return ''
-  const count = Math.max(1, item.numberCount || 1)
+  const count = numberCountOf(item)
   return count === 1 ? `（本题 ${formatScore(score)} 分）` : `（每小题 ${formatScore(score)} 分，共 ${formatScore(fromTenths(toTenths(score) * count))} 分）`
 }
 
@@ -179,7 +190,7 @@ export function itemScoreNote(item: PaperItem, section: DraftSection): string {
 export function boxScoreLabel(item: PaperItem, section: DraftSection): string {
   const score = effectiveScore(item, section)
   if (score == null) return ''
-  return Math.max(1, item.numberCount || 1) === 1 ? `（${formatScore(score)} 分）` : itemScoreNote(item, section)
+  return numberCountOf(item) === 1 ? `（${formatScore(score)} 分）` : itemScoreNote(item, section)
 }
 
 // 全卷满分说明：所有题号都设了分值才显示

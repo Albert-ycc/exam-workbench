@@ -57,14 +57,3 @@ export function appendQuestions(draft: PaperDraft, questions: LibraryQuestion[],
   // 保留草稿上的其他字段（如目标满分）
   return { draft: { ...draft, sections }, placed }
 }
-
-// 试卷里已经用过的原题：原题 id → 所在题号（同一道原题可能出现多次）
-export function originNumbers(sections: DraftSection[], numbered: { item: PaperItem; firstNo: number }[]): Map<number, number[]> {
-  const map = new Map<number, number[]>()
-  for (const n of numbered) {
-    if (n.item.originQuestionId == null) continue
-    map.set(n.item.originQuestionId, [...(map.get(n.item.originQuestionId) ?? []), n.firstNo])
-  }
-  void sections
-  return map
-}

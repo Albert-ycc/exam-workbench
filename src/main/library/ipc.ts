@@ -2,6 +2,7 @@
 import { ipcMain } from 'electron'
 import { LIBRARY_IPC, type FacetFilter, type QuestionFilter } from '@shared/library'
 import type { AppContext } from '../context'
+import { makeGuard, optionalId, toId, toIds } from '../ipc-guard'
 import { changeTags, createTag, deleteTag, listTags, renameTag } from '../tags'
 import { assignChapter, createChapter, deleteChapter, listChapters, moveChapter, renameChapter } from './classify'
 import { ImportService } from './import-job'
@@ -24,18 +25,7 @@ export function registerLibraryIpc(ctx: AppContext): void {
   })
 
   // 归类：章节与题目标签。编号只认正整数，名称的规整与校验在数据层
-  const guard =
-    <A extends unknown[], R>(fn: (...args: A) => R) =>
-    (event: Electron.IpcMainInvokeEvent, ...args: A): R => {
-      if (!ctx.fromMainWindow(event)) throw new Error('拒绝来自非主窗口的请求')
-      return fn(...args)
-    }
-  const toId = (value: unknown, what: string): number => {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${what} id 不正确`)
-    return value
-  }
-  const toIds = (value: unknown, what: string): number[] => (Array.isArray(value) ? value.map((v) => toId(v, what)) : [])
-  const optionalId = (value: unknown, what: string): number | null => (value == null ? null : toId(value, what))
+  const guard = makeGuard(ctx)
   // 题目 id 只认正整数：'120'、[121]、true 这类值不能被 Number() 悄悄转成某道题
   ipcMain.handle(LIBRARY_IPC.getQuestion, guard((id: unknown) => getQuestion(ctx.db(), toId(id, '题目'))))
   ipcMain.handle(LIBRARY_IPC.deleteQuestion, guard((id: unknown) => deleteQuestion(ctx.db(), toId(id, '题目'))))

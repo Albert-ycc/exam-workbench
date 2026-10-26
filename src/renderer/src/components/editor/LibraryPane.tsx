@@ -8,8 +8,7 @@ import { hasVisibleContent } from '@shared/numbering'
 import type { LibraryQuestion, SourcePaper } from '@shared/domain'
 import { navigateTo } from '../../navigation'
 import { IconChevronDown, IconPlus, IconScissors, IconSearch } from '../../icons'
-import { Button, Checkbox, EmptyState, RedPen, RedTick, Select, Tag, TextInput, usePersistentState } from '../ui'
-import { errorMessage } from './format'
+import { Button, Checkbox, EmptyState, RedPen, RedTick, Select, Tag, TextInput, errorMessage, usePersistentState } from '../ui'
 import { IconPanelLeft } from './icons'
 import { classFilter, classKey, describeClassFilters, isStoredFilters, NO_CLASS, NO_FILTERS, normalizeFilters, pruneMissing, withoutCondition, type ClassCondition, type Filters, type StoredFilters } from './libraryFilters'
 import MemoQuestionHtml from './MemoQuestionHtml'
@@ -257,13 +256,18 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
   const clearClass = (): void => setFilters((f) => ({ ...f, ...NO_CLASS }))
   const removeCondition = (item: ClassCondition): void => setFilters((f) => withoutCondition(f, item))
 
-  const pick = (id: number, checked: boolean): void =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(id)
-      else next.delete(id)
-      return next
-    })
+  const pick = useCallback(
+    (id: number, checked: boolean): void =>
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (checked) next.add(id)
+        else next.delete(id)
+        return next
+      }),
+    []
+  )
+  // 行上的 memo 要靠稳定的回调才起作用，不能在每行里现建箭头
+  const addOne = useCallback((question: LibraryQuestion): void => onAdd([question]), [onAdd])
 
   const addSelected = (): void => {
     const chosen = items.filter((q) => selected.has(q.id))
@@ -376,7 +380,7 @@ function LibraryPane({ paperId, addedAt, draggingId, collapsed, onToggleCollapse
               selected={selected.has(q.id)}
               selecting={selected.size > 0}
               onPick={pick}
-              onAdd={(question) => onAdd([question])}
+              onAdd={addOne}
             />
           ))}
           {items.length < total && (

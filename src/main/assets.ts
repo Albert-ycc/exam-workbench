@@ -1,7 +1,7 @@
 // 图片资源：按内容哈希存放在数据目录 assets/<sha256>.<ext>，内容里用 ewb-asset://<文件名> 引用。
 // 本文件不依赖 Electron，可在 node 测试里直接用；协议注册在 asset-protocol.ts。
-import { createHash } from 'node:crypto'
-import { existsSync, writeFileSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { existsSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 
@@ -43,7 +43,12 @@ export function saveAsset(db: DatabaseSync, dataDir: string, bytes: Uint8Array, 
   const name = `${hash}.${normalized}`
   if (!ASSET_NAME.test(name)) throw new Error(`不支持的图片格式：${ext}`)
   const file = join(dataDir, 'assets', name)
-  if (!existsSync(file)) writeFileSync(file, bytes)
+  // 先写临时文件再改名：写到一半中断不会留下占着正式文件名的半截文件；大小对不上的旧残留重写
+  if (!existsSync(file) || statSync(file).size !== bytes.byteLength) {
+    const temp = `${file}.tmp-${randomBytes(6).toString('hex')}`
+    writeFileSync(temp, bytes)
+    renameSync(temp, file)
+  }
   db.prepare('INSERT OR IGNORE INTO assets (hash, ext, bytes, created_at) VALUES (?, ?, ?, ?)').run(hash, normalized, bytes.byteLength, new Date().toISOString())
   return name
 }

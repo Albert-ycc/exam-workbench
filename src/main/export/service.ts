@@ -1,4 +1,4 @@
-// 下载流程：先按需存版本，再生成文件、落盘、记下载记录、记住本次配置。
+// 下载流程：先生成到临时文件，再存版本，再记下载记录并改名落盘，最后记住本次配置。
 // 渲染器（PDF / Word）由外部注入，所以这里不依赖 Electron，版本、命名、覆盖保护的逻辑可以在 node 里直接测。
 import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -6,7 +6,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ExportKind, ExportOptions, PaperSnapshot } from '../../shared/domain.ts'
 import type { ExportCheck, ExportDefaults, ExportRequest, ExportResult } from '../../shared/export.ts'
 import { assetPath } from '../assets.ts'
-import { ensureVersionForDownload, getExport, getPaper, getVersion, recordExport } from '../papers/repo.ts'
+import { ensureVersionForDownload, getExport, getPaper, getVersion, recordExport, transaction } from '../papers/repo.ts'
 import { buildCardDocument, type CardDocument } from './card.ts'
 import { checkDraft } from './check.ts'
 import { buildExportDocument, documentNodes, type ExportDocument } from './document.ts'
@@ -33,6 +33,10 @@ export interface ExportServiceDeps {
 
 // 下载时自动存的版本说明：不写格式与版别，同一个版本后面还会挂别的下载
 const AUTO_VERSION_NOTE = '下载时自动保存'
+const MAX_ATTEMPTS = 3
+
+// 事务内发现草稿已不是生成时的样子：只用来让事务回滚，不外抛
+class SnapshotChanged extends Error {}
 
 function optionsKey(kind: ExportKind, o: ExportOptions): string {
   return [kind, o.answerPosition, o.sourcePosition, o.format, o.answerArea].join('|')
@@ -50,6 +54,7 @@ function friendlyWriteError(error: unknown, target: string): Error {
   if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') return new Error(`无法保存「${name}」：文件正在被其他程序打开，或没有写入权限`)
   if (code === 'ENOSPC') return new Error('磁盘空间不足，无法保存文件')
   if (code === 'ENOENT') return new Error(`保存位置不存在：${dirname(target)}`)
+  if (code === 'ENAMETOOLONG') return new Error('保存位置的路径太长，请换一个较浅的文件夹或缩短试卷标题')
   return error instanceof Error ? error : new Error(String(error))
 }
 
@@ -134,8 +139,11 @@ export function createExportService(deps: ExportServiceDeps) {
   function place(tmp: string, directory: string, snapshot: PaperSnapshot, versionNo: number, versionId: number, kind: ExportKind, options: ExportOptions): { filePath: string; overwritten: boolean } {
     const target = targetPathFor(directory, exportFileName(snapshot.title, versionNo, options, kind), versionId, kind, options)
     const overwritten = existsSync(target)
-    moveTemp(tmp, target)
-    recordExport(deps.db(), versionId, options.format, options, target, kind)
+    // 记录先写、改名最后做：改名失败时记录随事务撤销
+    transaction(deps.db(), () => {
+      recordExport(deps.db(), versionId, options.format, options, target, kind)
+      moveTemp(tmp, target)
+    })
     return { filePath: target, overwritten }
   }
 
@@ -178,26 +186,29 @@ export function createExportService(deps: ExportServiceDeps) {
         const directory = checkDirectory(request.directory)
 
         // 先用草稿生成文件并写到临时文件：内容有问题（没有题、没有答案、图片丢失）、生成失败、保存位置不能写，
-        // 都发生在存版本之前，不会留下没有下载记录的版本
-        const paper = getPaper(db, paperId)
-        const draftSnapshot: PaperSnapshot = { title: paper.title, sections: paper.draft.sections }
-        let made = await produce(kind, draftSnapshot, options, directory)
-        try {
-          const { version, created } = ensureVersionForDownload(db, paperId, AUTO_VERSION_NOTE)
-          if (JSON.stringify(version.snapshot) !== JSON.stringify(draftSnapshot)) {
-            // 生成期间草稿又被改了：文件要和存下的版本一致，按版本重新生成
+        // 都发生在存版本之前。存版本、比对快照、改名与记下载记录在同一个事务里，任何一步失败版本一并撤销，不留孤儿版本
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+          const paper = getPaper(db, paperId)
+          const draftSnapshot: PaperSnapshot = { title: paper.title, sections: paper.draft.sections }
+          const made = await produce(kind, draftSnapshot, options, directory)
+          try {
+            const result = transaction(db, () => {
+              const { version, created } = ensureVersionForDownload(db, paperId, AUTO_VERSION_NOTE)
+              // 生成期间草稿又被改了：文件和存下的版本对不上，撤销重来
+              if (JSON.stringify(version.snapshot) !== JSON.stringify(draftSnapshot)) throw new SnapshotChanged()
+              const placed = place(made.tmp, directory, version.snapshot, version.versionNo, version.id, kind, options)
+              return { version, created, ...placed }
+            })
+            // 答题卡没有可选项，不覆盖「上一次的试卷配置」，只记保存位置
+            const remembered = kind === 'paper' ? options : readExportDefaults(deps.settingsFile(), deps.defaultDirectory()).options
+            writeExportDefaults(deps.settingsFile(), { options: remembered, directory })
+            return { kind, versionNo: result.version.versionNo, filePath: result.filePath, overwritten: result.overwritten, createdVersion: result.created, pageCount: made.pageCount, missingAnswers: made.prepared.missingAnswers }
+          } catch (error) {
             rmSync(made.tmp, { force: true })
-            made = await produce(kind, version.snapshot, options, directory)
+            if (!(error instanceof SnapshotChanged)) throw error
           }
-          const { filePath, overwritten } = place(made.tmp, directory, version.snapshot, version.versionNo, version.id, kind, options)
-          // 答题卡没有可选项，不覆盖「上一次的试卷配置」，只记保存位置
-          const remembered = kind === 'paper' ? options : readExportDefaults(deps.settingsFile(), deps.defaultDirectory()).options
-          writeExportDefaults(deps.settingsFile(), { options: remembered, directory })
-          return { kind, versionNo: version.versionNo, filePath, overwritten, createdVersion: created, pageCount: made.pageCount, missingAnswers: made.prepared.missingAnswers }
-        } catch (error) {
-          rmSync(made.tmp, { force: true })
-          throw error
         }
+        throw new Error('生成期间试卷内容一直在变，请稍后再下载')
       })
     },
 

@@ -13,14 +13,13 @@ import { addQuestionToPaper } from '../components/library/addToPaper'
 import { chapterPath } from '../components/library/chapterPath'
 import ChapterManagerModal from '../components/library/ChapterManagerModal'
 import { filterConditions, type FilterNames } from '../components/library/filterText'
-import { errorMessage } from '../components/library/format'
 import { useImportState } from '../components/library/importStore'
 import { isFiltered, libraryFilter, useLibraryFilter } from '../components/library/libraryFilterStore'
 import { useExecutedDeletes, useHiddenPapers } from '../components/library/paperTrash'
 import PaperPickerModal from '../components/library/PaperPickerModal'
 import QuestionRow, { type RowTagApi } from '../components/library/QuestionRow'
 import SelectionBar, { type TagStates } from '../components/library/SelectionBar'
-import { Button, Checkbox, ConfirmDialog, EmptyState, Select, TextInput, toast, usePersistentState } from '../components/ui'
+import { Button, Checkbox, ConfirmDialog, EmptyState, Select, TextInput, errorMessage, toast, usePersistentState } from '../components/ui'
 import './LibraryPage.css'
 
 const PAGE_SIZE = 30
@@ -31,6 +30,8 @@ const TYPE_SHOWN = 8
 // initial 是打开时每个标签在所选的题里的状况（全有 / 部分有 / 没有）：勾上又取消回到原样的，不算改动
 interface TagLog {
   single: boolean
+  questionId?: number // single 时是哪一道题：这一行被刷新掉后，小框的记录不再有意义
+  ids?: number[] // 批量时选择框打开那一刻的题号，之后每次打 / 去标签都对着这一批，不随筛选结果缩小
   n: number
   initial(tagId: number): 'all' | 'some' | 'none'
   ops: Map<number, { name: string; on: boolean }>
@@ -97,6 +98,8 @@ export default function LibraryPage() {
   const [assignAsk, setAssignAsk] = useState<{ chapterId: number; moving: number; total: number } | null>(null)
   const tagLog = useRef<TagLog | null>(null)
   const [noticeDismissed, setNoticeDismissed] = usePersistentState('ewb.library.noAnswerNoticeDismissed', false)
+  const selectionRef = useRef<Selection>(NO_SELECTION)
+  selectionRef.current = selection
   const request = useRef(0)
   const facetRequest = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -222,6 +225,9 @@ export default function LibraryPage() {
       setTotal(totalNow)
     } catch (e) {
       if (id === request.current) setError(errorMessage(e))
+    } finally {
+      // 它顶掉了进行中的「加载更多」，那一次不会再复位 loading
+      if (id === request.current) setLoading(false)
     }
   }, [library, query])
 
@@ -269,7 +275,8 @@ export default function LibraryPage() {
     await pruneSelection()
   }, [reloadList, loadFacets, reloadTags, reloadChapters, pruneSelection])
 
-  const removeQuestion = async (id: number): Promise<void> => {
+  // 失败时抛给 QuestionRow，由它提示并收起确认态
+  const removeQuestion = useCallback(async (id: number): Promise<void> => {
     await library.deleteQuestion(id)
     setItems((prev) => prev.filter((q) => q.id !== id))
     setTotal((n) => Math.max(0, n - 1))
@@ -282,9 +289,9 @@ export default function LibraryPage() {
     void loadFacets()
     void reloadTags()
     void reloadChapters()
-  }
+  }, [library, loadFacets, reloadTags, reloadChapters])
 
-  const addQuestion = async (question: LibraryQuestion, paperId: number): Promise<void> => {
+  const addQuestion = useCallback(async (question: LibraryQuestion, paperId: number): Promise<void> => {
     setPicking(null)
     setAddingId(question.id)
     try {
@@ -296,7 +303,7 @@ export default function LibraryPage() {
     } finally {
       setAddingId(null)
     }
-  }
+  }, [])
 
   // ---------- 勾选与批量操作 ----------
   const selectedCount = selection.kind === 'all' ? total : selection.ids.size
@@ -305,23 +312,34 @@ export default function LibraryPage() {
   const allLoadedSelected = items.length > 0 && loadedSelected === items.length
   const target = (): QuestionTarget => (selection.kind === 'all' ? { filter: query } : { ids: [...selection.ids] })
 
-  const selectRow = async (id: number, next: boolean): Promise<void> => {
-    if (selection.kind === 'ids') {
+  const selectRow = useCallback(
+    async (id: number, next: boolean): Promise<void> => {
+      if (selectionRef.current.kind === 'ids') {
+        setSelection((prev) => {
+          if (prev.kind !== 'ids') return prev
+          const ids = new Set(prev.ids)
+          if (next) ids.add(id)
+          else ids.delete(id)
+          return { kind: 'ids', ids }
+        })
+        return
+      }
+      if (next) return
+      // 「全选筛出的」里取消一道：改成具体的题号集合（一次取全，不是一页页攒）
+      const key = latestKey.current
+      const ids = await library.listQuestionIds(query)
+      if (key !== latestKey.current) return
+      // 取回前又取消了别的行时，那次已经把选择换成了题号集合：只从现有集合里去掉这一行，不拿旧的全量结果盖回去
       setSelection((prev) => {
-        if (prev.kind !== 'ids') return prev
-        const ids = new Set(prev.ids)
-        if (next) ids.add(id)
-        else ids.delete(id)
-        return { kind: 'ids', ids }
+        if (prev.kind !== 'ids') return { kind: 'ids', ids: new Set(ids.filter((x) => x !== id)) }
+        if (!prev.ids.has(id)) return prev
+        const kept = new Set(prev.ids)
+        kept.delete(id)
+        return { kind: 'ids', ids: kept }
       })
-      return
-    }
-    if (next) return
-    // 「全选筛出的」里取消一道：改成具体的题号集合（一次取全，不是一页页攒）
-    const key = latestKey.current
-    const ids = await library.listQuestionIds(query)
-    if (key === latestKey.current) setSelection({ kind: 'ids', ids: new Set(ids.filter((x) => x !== id)) })
-  }
+    },
+    [library, query]
+  )
   const toggleLoaded = (): void => setSelection(allLoadedSelected ? NO_SELECTION : { kind: 'ids', ids: new Set(items.map((q) => q.id)) })
 
   const assign = async (chapterId: number | null): Promise<void> => {
@@ -354,11 +372,14 @@ export default function LibraryPage() {
     }
   }
 
-  const createTag = async (name: string): Promise<TagRef> => {
-    const tag = await library.createTag(name)
-    await reloadTags()
-    return { id: tag.id, name: tag.name }
-  }
+  const createTag = useCallback(
+    async (name: string): Promise<TagRef> => {
+      const tag = await library.createTag(name)
+      await reloadTags()
+      return { id: tag.id, name: tag.name }
+    },
+    [library, reloadTags]
+  )
 
   useEffect(() => {
     if (selectedCount === 0 && tagLog.current && !tagLog.current.single) flushTagLog()
@@ -373,7 +394,7 @@ export default function LibraryPage() {
     log.ops.set(tag.id, { name: tag.name, on })
   }
   // 选择框关闭：有改动就汇总成一条提示
-  const flushTagLog = (): void => {
+  const flushTagLog = useCallback((): void => {
     const log = tagLog.current
     tagLog.current = null
     if (!log) return
@@ -385,10 +406,11 @@ export default function LibraryPage() {
     if (added.length > 0) parts.push(`已给${subject}打上${added.join('、')}`)
     if (removed.length > 0) parts.push(added.length > 0 ? `去掉${removed.join('、')}` : `已从${subject}去掉${removed.join('、')}`)
     if (parts.length > 0) toast.show(parts.join('，'))
-  }
+  }, [])
 
   const changeSelectedTag = async (tag: TagRef, on: boolean): Promise<void> => {
-    const n = await library.changeQuestionTags(target(), on ? { add: [tag.id] } : { remove: [tag.id] })
+    const fixed = tagLog.current?.ids
+    const n = await library.changeQuestionTags(fixed ? { ids: fixed } : target(), on ? { add: [tag.id] } : { remove: [tag.id] })
     logTag(tag, on, n)
     void refreshAll() // 选择框里的勾选状态不等列表刷新完
   }
@@ -406,15 +428,15 @@ export default function LibraryPage() {
         else if (n > 0) mixed.add(id)
       }
     }
-    tagLog.current = { single: false, n: ids.length, initial: (id) => (checked.has(id) ? 'all' : mixed.has(id) ? 'some' : 'none'), ops: new Map() }
+    tagLog.current = { single: false, ids, n: ids.length, initial: (id) => (checked.has(id) ? 'all' : mixed.has(id) ? 'some' : 'none'), ops: new Map() }
     return { checked, mixed, counts, size: ids.length }
   }
 
   // 单题打标签：勾选后马上落库并更新这一行；提示在选择框关闭时汇总，列表也在那时才刷新
-  const toggleRowTag = async (question: LibraryQuestion, tag: TagRef, on: boolean): Promise<void> => {
+  const toggleRowTag = useCallback(async (question: LibraryQuestion, tag: TagRef, on: boolean): Promise<void> => {
     if (tagLog.current === null) {
       const had = new Set(question.tags.map((t) => t.id))
-      tagLog.current = { single: true, n: 1, initial: (id) => (had.has(id) ? 'all' : 'none'), ops: new Map() }
+      tagLog.current = { single: true, questionId: question.id, n: 1, initial: (id) => (had.has(id) ? 'all' : 'none'), ops: new Map() }
     }
     try {
       await library.changeQuestionTags({ ids: [question.id] }, on ? { add: [tag.id] } : { remove: [tag.id] })
@@ -432,17 +454,27 @@ export default function LibraryPage() {
     )
     void loadFacets()
     void reloadTags()
-  }
-  const rowTagApi: RowTagApi = {
-    tags,
-    onToggle: toggleRowTag,
-    onCreate: createTag,
-    onManage: () => setManaging('tags'),
-    onClosed: () => {
-      flushTagLog()
-      void refreshAll()
-    }
-  }
+  }, [library, loadFacets, reloadTags])
+  const rowTagApi = useMemo<RowTagApi>(
+    () => ({
+      tags,
+      onToggle: toggleRowTag,
+      onCreate: createTag,
+      onManage: () => setManaging('tags'),
+      onClosed: () => {
+        flushTagLog()
+        void refreshAll()
+      }
+    }),
+    [tags, toggleRowTag, createTag, flushTagLog, refreshAll]
+  )
+  const recentPapers = useMemo(() => livePapers.slice(0, 3), [livePapers])
+
+  // 单题标签小框开着时，那一行被刷新掉（别处删了题、条件变了）：记录跟着作废，免得下次打开混进旧的
+  useEffect(() => {
+    const log = tagLog.current
+    if (log?.single && !items.some((q) => q.id === log.questionId)) tagLog.current = null
+  }, [items])
 
   const groups = useMemo(() => groupTypes(facets, filter.type), [facets, filter.type])
   // 题型默认只列前 8 个大类；选中的大类不在其中时也列出来，始终看得到自己选了什么
@@ -595,15 +627,15 @@ export default function LibraryPage() {
               index={i + 1}
               question={q}
               selected={isSelected(q.id)}
-              onSelect={(next) => void selectRow(q.id, next)}
+              onSelect={selectRow}
               chapterLabel={chapterPath(chapters, q.chapterId)}
               tagApi={rowTagApi}
               keyword={filter.keyword}
               markNoAnswer={!noAnswerAnywhere}
               usage={usage[q.id] ?? 0}
-              recentPapers={livePapers.slice(0, 3)}
+              recentPapers={recentPapers}
               adding={addingId === q.id}
-              onAdd={(question, paperId) => void addQuestion(question, paperId)}
+              onAdd={addQuestion}
               onPick={setPicking}
               onDelete={removeQuestion}
             />

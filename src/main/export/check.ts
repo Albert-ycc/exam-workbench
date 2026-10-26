@@ -2,7 +2,7 @@
 // 纯函数，不依赖 Electron。计数、缺答案、未设分值一律取自 structureOf，与编辑器、试卷库、版本历史用同一个口径。
 import type { ExportKind, ExportOptions, PaperDraft } from '../../shared/domain.ts'
 import { formatQuestionNos, type ExportCheck, type ExportIssue } from '../../shared/export.ts'
-import { chineseNumeral, formatScore, hasVisibleContent, normalizeScore, numberItems, structureOf } from '../../shared/numbering.ts'
+import { blockNos, chineseNumeral, formatScore, hasVisibleContent, normalizeScore, numberItems, structureOf } from '../../shared/numbering.ts'
 
 function issue(type: ExportIssue['type'], blocking: boolean, message: string, questionNos: number[] = [], sectionIndex: number | null = null): ExportIssue {
   return { type, blocking, message, questionNos, questionLabel: formatQuestionNos(questionNos), sectionIndex }
@@ -29,7 +29,7 @@ export function checkDraft(draft: PaperDraft, options: ExportOptions, kind: Expo
   }
 
   // 题干没有文字也没有图片：这几题下载出来是空白的
-  const emptyStem = numberItems(sections).flatMap((n) => (hasVisibleContent(n.item.stemHtml) ? [] : Array.from({ length: n.lastNo - n.firstNo + 1 }, (_, k) => n.firstNo + k)))
+  const emptyStem = numberItems(sections).flatMap((n) => (hasVisibleContent(n.item.stemHtml) ? [] : blockNos(n)))
   if (emptyStem.length > 0) issues.push(issue('empty-stem', false, `第 ${formatQuestionNos(emptyStem)} 题的题干是空的，下载出来这几题只有题号`, emptyStem))
 
   const unscored = structure.unscoredNos
@@ -58,8 +58,9 @@ export function checkDraft(draft: PaperDraft, options: ExportOptions, kind: Expo
   }
 
   const target = normalizeScore(draft.targetScore)
-  if (target != null) {
-    const total = structure.totalScore ?? 0
+  // 整卷一分都没设时合计不存在，「未设分值」那条已经说明了，不再报差多少分
+  if (target != null && structure.totalScore !== null) {
+    const total = structure.totalScore
     const diffTenths = Math.round(target * 10) - Math.round(total * 10)
     if (diffTenths !== 0) {
       const gap = formatScore(Math.abs(diffTenths) / 10)

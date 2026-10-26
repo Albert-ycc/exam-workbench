@@ -68,7 +68,8 @@ export function checkDirectory(path: unknown): string {
 export function readExportDefaults(file: string, defaultDirectory: string): ExportDefaults {
   let raw: { options?: unknown; directory?: unknown } = {}
   try {
-    raw = JSON.parse(readFileSync(file, 'utf8')) as typeof raw
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+    if (typeof parsed === 'object' && parsed !== null) raw = parsed as typeof raw
   } catch {
     // 首次使用或文件损坏
   }

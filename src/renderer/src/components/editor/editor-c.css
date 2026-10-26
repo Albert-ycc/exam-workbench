@@ -1188,7 +1188,7 @@
   font-size: 13px;
 }
 .ed-target-note.is-ok {
-  color: var(--ok);
+  color: var(--bb);
 }
 .ed-target-note.is-warn {
   color: var(--warn);

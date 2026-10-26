@@ -14,7 +14,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities'
 import type { DraftSection } from '@shared/domain'
 import { primaryQuestionType } from '@shared/library'
-import { chineseNumeral, formatScore, normalizeScore, numberLabel, type NumberedItem, type PaperStructure, type SectionStructure } from '@shared/numbering'
+import { chineseNumeral, formatScore, normalizeScore, numberCountOf, numberLabel, type NumberedItem, type PaperStructure, type SectionStructure } from '@shared/numbering'
 import { IconChevronDown, IconPlus } from '../../icons'
 import { Button, Menu, NumberInput, Segmented, usePersistentState } from '../ui'
 import { IconGrip } from './icons'
@@ -54,7 +54,7 @@ export function typesSummary(section: DraftSection): string {
   const counts = new Map<string, number>()
   for (const item of section.items) {
     const type = primaryQuestionType(item.questionType.trim()) || '未分类'
-    counts.set(type, (counts.get(type) ?? 0) + Math.max(1, item.numberCount || 1))
+    counts.set(type, (counts.get(type) ?? 0) + numberCountOf(item))
   }
   if (counts.size === 0) return '—'
   if (counts.size === 1) return [...counts.keys()][0]

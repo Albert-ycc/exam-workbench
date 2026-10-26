@@ -5,7 +5,6 @@
 import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Page } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
 import { openDatabase } from '../../src/main/db.ts'
@@ -111,7 +110,6 @@ async function shows(ids: number[]): Promise<void> {
     { timeout: 8000 }
   )
 }
-const cardIds = (): Promise<number[]> => page.locator('[data-testid="lib-card"]').evaluateAll((els) => els.map((el) => Number((el as HTMLElement).dataset.questionId)))
 
 async function openMore(): Promise<void> {
   if (!(await pop.isVisible())) await moreButton.click()

@@ -324,6 +324,11 @@ function tableRows(table: ElementNode): ElementNode[] {
   return rows
 }
 
+// 没有单元格的行不输出：所有行都是空的表会变成没有 <w:tr> 的 <w:tbl>，Word 会报无法读取
+function dataRows(table: ElementNode): ElementNode[] {
+  return tableRows(table).filter((row) => cellsOf(row).length > 0)
+}
+
 function cellsOf(row: ElementNode): ElementNode[] {
   return row.children.filter((c): c is ElementNode => c.type === 'el' && (c.tag === 'td' || c.tag === 'th'))
 }
@@ -334,7 +339,7 @@ const span = (v: string | undefined): number => {
 }
 
 function dataTable(table: ElementNode, ctx: Ctx): Table {
-  const rows = tableRows(table)
+  const rows = dataRows(table)
   // 列数与每列估计宽度（含左右内边距）
   const grid: number[] = []
   const occupied: number[] = [] // 各列被上方跨行单元格占用到第几行
@@ -420,7 +425,7 @@ function blocksToDocx(blocks: HNode[], ctx: Ctx): (Paragraph | Table)[] {
         break
       case 'table':
         if (role === 'options') out.push(...optionsParagraphs(block, ctx))
-        else if (tableRows(block).length > 0) out.push(dataTable(block, ctx), spacer(120))
+        else if (dataRows(block).length > 0) out.push(dataTable(block, ctx), spacer(120))
         break
       case 'ol':
       case 'ul':

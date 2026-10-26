@@ -57,6 +57,12 @@ function imageRefsOf(imageCount: number, ...htmls: (string | null)[]): number[] 
   return [...refs]
 }
 
+function imageToken(raw: string): string {
+  if (raw.startsWith('data:')) return `data:${createHash('sha256').update(raw).digest('hex')}`
+  const q = raw.search(/[?#]/)
+  return q < 0 ? raw : raw.slice(0, q)
+}
+
 const clamp = (text: string, max: number): string => (text.length > max ? text.slice(0, max) : text)
 
 // 来源卷链接：试卷页取规范路径；智能组卷预览页所有人共用同一路径，用题目编号的哈希区分
@@ -99,7 +105,8 @@ export async function preparePage(extracted: ExtractedPage, requestedUrl: string
   const questions: PreparedQuestion[] = extracted.questions.map((q: ExtractedQuestion, i) => {
     const imageRefs = imageRefsOf(extracted.images.length, q.stemHtml, q.answerHtml)
     const stemRefs = imageRefsOf(extracted.images.length, q.stemHtml)
-    const tokens = stemRefs.map((index) => images[index]?.sha ?? `url:${extracted.images[index]}`)
+    // 指纹只用图片地址：下载成败不能改变同一道题的指纹
+    const tokens = stemRefs.map((index) => imageToken(extracted.images[index]))
     const fingerprint = fingerprintOf(q.stemText, tokens)
     const repeatInJob = Boolean(q.qid && seen.hasQid(q.qid)) || seen.has(q.qid, fingerprint)
     const meta = sanitizeMeta({ knowledge: q.knowledge, difficulty: q.difficulty })

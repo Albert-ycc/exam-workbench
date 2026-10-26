@@ -46,7 +46,13 @@ function decodeDataUrl(raw: string): Uint8Array | null {
   if (comma < 0) return null
   const meta = raw.slice(5, comma)
   const body = raw.slice(comma + 1)
-  return meta.endsWith(';base64') ? Buffer.from(body, 'base64') : Buffer.from(decodeURIComponent(body), 'utf8')
+  if (meta.endsWith(';base64')) return Buffer.from(body, 'base64')
+  // 内联 SVG 常带裸 %（如 width="100%"），解不开按这一张图下载失败处理
+  try {
+    return Buffer.from(decodeURIComponent(body), 'utf8')
+  } catch {
+    return null
+  }
 }
 
 function finish(bytes: Uint8Array): DownloadedImage | null {

@@ -5,8 +5,9 @@ import type { PaperCategory, Tag, TagRef } from '@shared/classify'
 import type { PaperSummary } from '@shared/domain'
 import { IconCheck, IconFolder, IconMore } from '../../icons'
 import { TagPicker } from '../classify'
-import { formatTime, structureLine } from '../library/format'
-import { Button, Checkbox, IconButton, Menu, Popover, Tag as MarkTag, cx } from '../ui'
+import { structureLine } from '../library/format'
+import { unscoredText } from '../versions/exportSummary'
+import { Button, Checkbox, IconButton, Menu, Popover, Tag as MarkTag, cx, formatTime } from '../ui'
 import './papers.css'
 
 // 搜索命中的字用荧光笔标出
@@ -26,7 +27,8 @@ function Highlight({ text, query }: { text: string; query: string }): ReactNode 
 function secondLine(paper: PaperSummary): string {
   const { sectionCount, questionCount, totalScore, unscoredCount } = paper.structure
   if (questionCount === 0) return ''
-  return `${sectionCount} 个大题${unscoredCount > 0 && totalScore != null ? `，${unscoredCount} 题未设分` : ''}`
+  const unscored = unscoredText({ unscoredCount, totalScore })
+  return `${sectionCount} 个大题${unscored ? `，${unscored}` : ''}`
 }
 
 // 行上最多渲染这么多个标签块（再多的只在「+N」里），其中放得下几个由 MetaLine 按行宽量

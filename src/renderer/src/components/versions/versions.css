@@ -5,10 +5,10 @@
 .ed-ver-msg {
   margin: 8px 0 0;
   padding: 7px 10px;
-  border-left: 3px solid var(--ok);
-  background: var(--ok-bg);
+  border-left: 3px solid var(--bb);
+  background: var(--bb-bg);
   font-size: 13px;
-  color: var(--ok);
+  color: var(--bb);
   overflow-wrap: anywhere;
 }
 .ed-ver-msg.is-error {

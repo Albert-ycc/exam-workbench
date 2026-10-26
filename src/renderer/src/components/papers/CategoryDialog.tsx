@@ -3,8 +3,7 @@
 import { useRef, useState } from 'react'
 import { CATEGORY_PRESETS, CLASS_NAME_MAX, classNameLength, cleanClassName, type PaperCategory } from '@shared/classify'
 import { IconChevronDown } from '../../icons'
-import { errorMessage } from '../library/format'
-import { Button, Menu, Modal, TextInput } from '../ui'
+import { Button, Menu, Modal, TextInput, errorMessage } from '../ui'
 import './papers.css'
 
 // 与数据库一致：同名只折叠 ASCII 大小写

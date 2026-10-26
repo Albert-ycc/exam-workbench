@@ -6,6 +6,7 @@ import { estimateTextWidth, measureKey, type MeasureRequest, type TextMeasure } 
 
 const PX_TWIPS = 15 // 96 dpi：1 像素 = 15 twips
 const BODY_PX = 14 // 五号 10.5pt = 14px
+const TIMEOUT_MS = 120_000
 const FONT_STACK = '"Times New Roman", "SimSun", "宋体", "Songti SC", serif'
 
 // 在隐藏窗口里执行：逐条量宽，单位像素
@@ -17,6 +18,7 @@ const MEASURE_SCRIPT = (requests: MeasureRequest[]): string => `(() => {
   })
 })()`
 
+// 测宽只是为了排得更准：窗口加载失败、脚本出错或超时都退回估算，不让整个 Word 导出失败
 export async function measureTexts(requests: MeasureRequest[]): Promise<TextMeasure> {
   if (requests.length === 0) return estimateTextWidth
   const win = new BrowserWindow({
@@ -25,14 +27,25 @@ export async function measureTexts(requests: MeasureRequest[]): Promise<TextMeas
     height: 360,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
   })
+  let timer: NodeJS.Timeout | undefined
   try {
-    await win.loadURL('about:blank')
-    const widths = (await win.webContents.executeJavaScript(MEASURE_SCRIPT(requests))) as number[]
+    const work = (async (): Promise<number[]> => {
+      await win.loadURL('about:blank')
+      return (await win.webContents.executeJavaScript(MEASURE_SCRIPT(requests))) as number[]
+    })()
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('测量文字宽度超时')), TIMEOUT_MS)
+    })
+    const widths = await Promise.race([work, timeout])
     const table = new Map<string, number>()
     requests.forEach((r, i) => table.set(measureKey(r.text, r.bold), Math.ceil(widths[i] * PX_TWIPS)))
     // 没量到的（文字在两次生成之间变了的情况）退回估算
     return (text, bold) => table.get(measureKey(text, bold)) ?? estimateTextWidth(text)
+  } catch (error) {
+    console.warn('文字测宽失败，改用估算宽度：', error)
+    return estimateTextWidth
   } finally {
+    if (timer) clearTimeout(timer)
     win.destroy()
   }
 }

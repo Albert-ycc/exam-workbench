@@ -1,5 +1,6 @@
 // 入库任务的界面状态。放在模块级而不是页面组件里：切到其他页面再回来，任务进度和预览都还在。
 import { useSyncExternalStore } from 'react'
+import { errorMessage } from '../ui'
 import { classifyZujuanUrl, normalizeImportUrl, splitPastedLinks, type ImportCommitResult, type ImportProgress } from '@shared/library'
 
 export type ImportStage = 'idle' | 'starting' | 'running' | 'preview' | 'committing' | 'done'
@@ -25,12 +26,6 @@ function set(next: ImportState): void {
   listeners.forEach((l) => l())
 }
 
-// 主进程的错误经 IPC 传来时带「Error invoking remote method …」前缀，去掉
-export function friendlyError(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error)
-  return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-}
-
 function ensureSubscribed(): void {
   if (unsubscribe) return
   unsubscribe = window.workbench.library.onImportProgress((progress) => {
@@ -52,7 +47,7 @@ async function start(begin: () => Promise<{ jobId: string }>): Promise<void> {
     else if (now.stage === 'starting') set({ ...now, jobId, stage: 'running' })
     else if (!now.jobId) set({ ...now, jobId })
   } catch (error) {
-    set({ ...IDLE, draft: state.draft, error: friendlyError(error) })
+    set({ ...IDLE, draft: state.draft, error: errorMessage(error) })
   }
 }
 
@@ -76,7 +71,7 @@ export const importActions = {
       const result = await window.workbench.library.commitImport(jobId)
       set({ ...state, stage: 'done', result, draft: '' })
     } catch (error) {
-      set({ ...state, stage: 'preview', error: friendlyError(error) })
+      set({ ...state, stage: 'preview', error: errorMessage(error) })
     }
   },
   // 取消进行中的任务，或放弃尚未确认的预览

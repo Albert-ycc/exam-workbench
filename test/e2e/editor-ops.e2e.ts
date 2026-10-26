@@ -122,7 +122,6 @@ try {
 
   // ================= 撤销 / 重做 =================
   const base = structureDraft()
-  const baseLayout = layout(base)
 
   await step('F1 撤销重做：删题、删大题、调序、改名、改分值、加入共 7 步，Ctrl+Z 逐步回到起点，Ctrl+Shift+Z 逐步回来', async () => {
     const id = await seedPaper(page, '撤销测试卷', base)

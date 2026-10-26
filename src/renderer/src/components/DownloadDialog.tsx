@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import { normalizeExportOptions, type ExportFormat, type ExportKind, type ExportOptions, type SourcePosition } from '@shared/domain'
 import { ANSWER_SPACE_MM, type ExportCheck, type ExportIssue, type ExportIssueType, type ExportResult } from '@shared/export'
 import { IconFolder } from '../icons'
-import { Button, Checkbox, Modal, Segmented, Tag } from './ui'
+import { Button, Checkbox, Modal, Segmented, Tag, errorMessage } from './ui'
 import './DownloadDialog.css'
 
 export interface DownloadDialogProps {
@@ -68,12 +68,6 @@ function jobsOf(kind: ExportKind, form: PaperForm, both: boolean, alsoPaper: boo
   }
   if (both) return [student, teacher]
   return [form.edition === 'student' ? student : teacher]
-}
-
-// 主进程抛出的错误会带上「Error invoking remote method」前缀，只留原因
-function reasonOf(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error)
-  return raw.replace(/^Error invoking remote method '[^']*': (?:Error: )?/, '')
 }
 
 // 路径里最后一个分隔符之后是文件名；文件夹太长时省略前面的部分，文件名一直完整显示
@@ -180,7 +174,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
         setDirectory(defaults.directory)
         setLoaded(true)
       })
-      .catch((e: unknown) => !stale && setError(reasonOf(e)))
+      .catch((e: unknown) => !stale && setError(errorMessage(e)))
     return () => {
       stale = true
     }
@@ -194,7 +188,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
     window.workbench.exporter
       .checkExport(paperId, job.options, job.kind)
       .then((next) => !stale && setCheck(next))
-      .catch((e: unknown) => !stale && setError(reasonOf(e)))
+      .catch((e: unknown) => !stale && setError(errorMessage(e)))
     return () => {
       stale = true
     }
@@ -261,7 +255,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
         setError(null)
       }
     } catch (e) {
-      setError(reasonOf(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -278,7 +272,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
       }
       setPhase('done')
     } catch (e) {
-      setError(done.length > 0 ? `已保存 ${done.length} 份，第 ${done.length + 1} 份失败：${reasonOf(e)}` : reasonOf(e))
+      setError(done.length > 0 ? `已保存 ${done.length} 份，第 ${done.length + 1} 份失败：${errorMessage(e)}` : errorMessage(e))
       setPhase(done.length > 0 ? 'done' : 'idle')
     } finally {
       setProgress(null)
@@ -290,7 +284,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
     try {
       await window.workbench.exporter.showInFolder(filePath)
     } catch (e) {
-      setError(reasonOf(e))
+      setError(errorMessage(e))
     }
   }
 
@@ -323,7 +317,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
       onClose={close}
       footer={
         <>
-          <span className="dl-foot-note" id={statusId} role={reason ? 'status' : undefined}>
+          <span className={`dl-foot-note${blocked ? ' is-block' : ''}`} id={statusId} role={reason ? 'status' : undefined}>
             {reason}
           </span>
           <Button disabled={working} onClick={close}>
@@ -365,7 +359,7 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
                   <li key={`${issue.type}-${k}`} className={issue.blocking ? 'is-block' : 'is-tip'}>
                     <Tag tone={issue.blocking ? 'red' : 'warn'}>{ISSUE_LABEL[issue.type]}</Tag>
                     <span className="dl-issue-text">
-                      <MessageWithNumbers issue={issue} onLocate={onLocate} />
+                      <MessageWithNumbers issue={issue} onLocate={working ? undefined : onLocate} />
                     </span>
                   </li>
                 ))}

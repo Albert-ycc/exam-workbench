@@ -2,11 +2,12 @@
 // 数学卷真实入库（打开组卷网试卷页 1 次，图片真实下载，用来看公式图清晰度与基线）；
 // 英语、物理两份用 test/fixtures 里的真实页面样本经本机拦截入库（不产生外网访问，图片是占位图）。
 // 教师版需要答案，而未登录时答案为空，所以组卷时给选中的题补一条示意答案，只用来看卷尾答案的版式。
+// 会联网访问组卷网，默认不跑（设了 EWB_REAL_DATA 复用已入库数据时才不联网入库）。
 // 用法：node test/e2e/export-real.e2e.ts [证据目录]
 //   环境变量 EWB_REAL_DATA=<数据目录>：复用上一次已入库的数据目录（会复制到临时目录再用），不再打开组卷网，调试版式时用，避免重复访问。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import type { ElectronApplication } from 'playwright'
@@ -20,7 +21,7 @@ const filesDir = join(evidence, 'files')
 const convDir = join(evidence, 'docx-as-pdf')
 for (const d of ['files', 'docx-as-pdf']) rmSync(join(evidence, d), { recursive: true, force: true })
 for (const d of [filesDir, convDir]) mkdirSync(d, { recursive: true })
-for (const f of execFileSync('ls', [evidence], { encoding: 'utf8' }).split('\n').filter((n) => n.endsWith('.png'))) rmSync(join(evidence, f))
+for (const f of readdirSync(evidence).filter((n) => /-(student-pdf|teacher-end-docx)-\d+\.png$/.test(n))) rmSync(join(evidence, f))
 
 const MATH_URL = 'https://zujuan.xkw.com/2p3543573.html'
 const ENGLISH_URL = 'https://zujuan.xkw.com/2p1111111.html'
@@ -35,7 +36,7 @@ if (reuse) {
   dataDir = mkdtempSync(join(tmpdir(), 'ewb-real-data-'))
   cpSync(reuse, dataDir, { recursive: true })
 }
-const { app, window } = await launchApp({ outDir: 'out-export3', dataDir })
+const { app, window } = await launchApp({ outDir: 'out-export3', dataDir, online: true })
 const nav = (label: string) => window.getByRole('button', { name: label, exact: true })
 const button = (label: string) => window.getByRole('button', { name: label, exact: true })
 

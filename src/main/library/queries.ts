@@ -104,9 +104,13 @@ export function sanitizeFilter(raw: unknown): QuestionFilter {
 type Facet = 'type' | 'chapter' | 'knowledge' | 'difficulty' | 'tag'
 
 // 关键词以外的全部条件；skip 指定的那一项不参与（统计该项各选项的题数时用）
-function baseWhere(filter: QuestionFilter, skip: Facet | null): { where: string[]; params: (string | number)[] } {
+function baseWhere(filter: QuestionFilter, skip: Facet | null, hits: number[] | null): { where: string[]; params: (string | number)[] } {
   const where: string[] = []
   const params: (string | number)[] = []
+  if (hits) {
+    where.push('q.id IN (SELECT value FROM json_each(?))')
+    params.push(JSON.stringify(hits))
+  }
   if (skip !== 'type' && filter.questionType) {
     // 组卷网题型标签形如「解答题-计算题」：筛选大类时连同子类一起取
     where.push("(q.question_type = ? OR q.question_type LIKE ? ESCAPE '\\')")
@@ -151,49 +155,38 @@ function baseWhere(filter: QuestionFilter, skip: Facet | null): { where: string[
   return { where, params }
 }
 
-// 关键词：按题干纯文本匹配。不在原始 HTML 上用 LIKE 粗筛——「OA．」存成 <i>OA</i>．，粗筛会把能匹配的题漏掉
-function keywordMatches(db: DatabaseSync, filter: QuestionFilter, skip: Facet | null): { id: number; type: string }[] {
-  const keyword = filter.keyword!.trim()
-  const { where, params } = baseWhere(filter, skip)
-  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : ''
+// 关键词：按题干纯文本匹配，只扫一遍全库，返回命中的题号。不在原始 HTML 上用 LIKE 粗筛——「OA．」存成 <i>OA</i>．，粗筛会把能匹配的题漏掉。
+// 其余各项条件再以 SQL 条件与这个集合相交，一次请求里不重复读题干
+function keywordHits(db: DatabaseSync, filter: QuestionFilter): number[] | null {
+  if (!filter.keyword?.trim()) return null
   // 关键词是用户打的文字，不当 HTML 处理：「<i>」要找的是这三个字符本身
-  const needle = keyword.replace(/\s+/g, ' ').toLowerCase()
-  const rows = db.prepare(`SELECT q.id, q.question_type, q.stem_html FROM questions q${whereSql} ${ORDER}`).all(...params) as { id: number; question_type: string; stem_html: string }[]
-  return rows.filter((row) => plainText(row.stem_html).includes(needle)).map((row) => ({ id: row.id, type: row.question_type }))
+  const needle = filter.keyword.trim().replace(/\s+/g, ' ').toLowerCase()
+  const rows = db.prepare('SELECT id, stem_html FROM questions').all() as { id: number; stem_html: string }[]
+  return rows.filter((row) => plainText(row.stem_html).includes(needle)).map((row) => row.id)
 }
 
 export function listQuestions(db: DatabaseSync, rawFilter: QuestionFilter): QuestionPage {
   const filter = sanitizeFilter(rawFilter)
   const limit = Math.min(Math.max(filter.limit ?? 200, 1), 1000)
   const offset = Math.max(filter.offset ?? 0, 0)
-
-  if (!filter.keyword?.trim()) {
-    const { where, params } = baseWhere(filter, null)
-    const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : ''
-    const total = (db.prepare(`SELECT COUNT(*) AS n FROM questions q${whereSql}`).get(...params) as { n: number }).n
-    const rows = db.prepare(`${SELECT_QUESTION}${whereSql} ${ORDER} LIMIT ? OFFSET ?`).all(...params, limit, offset) as unknown as QuestionRow[]
-    return { total, items: withClassification(db, rows.map(toQuestion)) }
-  }
-
-  const ids = keywordMatches(db, filter, null).map((row) => row.id)
-  const pageIds = ids.slice(offset, offset + limit)
-  if (pageIds.length === 0) return { total: ids.length, items: [] }
-  const rows = db.prepare(`${SELECT_QUESTION} WHERE q.id IN (SELECT value FROM json_each(?))`).all(JSON.stringify(pageIds)) as unknown as QuestionRow[]
-  const byId = new Map(rows.map((row) => [row.id, toQuestion(row)]))
-  return { total: ids.length, items: withClassification(db, pageIds.map((id) => byId.get(id)!).filter(Boolean)) }
+  const { where, params } = baseWhere(filter, null, keywordHits(db, filter))
+  const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : ''
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM questions q${whereSql}`).get(...params) as { n: number }).n
+  const rows = db.prepare(`${SELECT_QUESTION}${whereSql} ${ORDER} LIMIT ? OFFSET ?`).all(...params, limit, offset) as unknown as QuestionRow[]
+  return { total, items: withClassification(db, rows.map(toQuestion)) }
 }
 
-// 符合条件的全部题号，按列表顺序；skip 指定的那一项条件不参与
-function matchIds(db: DatabaseSync, filter: QuestionFilter, skip: Facet | null): number[] {
-  if (filter.keyword?.trim()) return keywordMatches(db, filter, skip).map((row) => row.id)
-  const { where, params } = baseWhere(filter, skip)
+// 符合条件的全部题号，按列表顺序；skip 指定的那一项条件不参与；hits 是已算好的关键词命中集合
+function matchIds(db: DatabaseSync, filter: QuestionFilter, skip: Facet | null, hits: number[] | null): number[] {
+  const { where, params } = baseWhere(filter, skip, hits)
   const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : ''
   return (db.prepare(`SELECT q.id FROM questions q${whereSql} ${ORDER}`).all(...params) as { id: number }[]).map((row) => row.id)
 }
 
 // 「全选筛出的 N 道」：按条件取全部题号，不受分页影响
 export function listQuestionIds(db: DatabaseSync, rawFilter: FacetFilter): number[] {
-  return matchIds(db, sanitizeFilter(rawFilter), null)
+  const filter = sanitizeFilter(rawFilter)
+  return matchIds(db, filter, null, keywordHits(db, filter))
 }
 
 const FILTER_KEYS = ['questionType', 'sourcePaperId', 'keyword', 'ids', 'chapterIds', 'knowledgeIds', 'difficulties', 'tagIds', 'limit', 'offset'] as const
@@ -215,7 +208,10 @@ function strictFilter(raw: unknown): QuestionFilter {
 export function resolveTarget(db: DatabaseSync, raw: unknown): number[] {
   const target = (typeof raw === 'object' && raw !== null ? raw : {}) as Partial<{ ids: unknown; filter: unknown }>
   if (Array.isArray(target.ids)) return [...new Set(target.ids.filter((id): id is number => cleanInt(id) !== undefined))]
-  if ('filter' in target) return matchIds(db, strictFilter(target.filter), null)
+  if ('filter' in target) {
+    const filter = strictFilter(target.filter)
+    return matchIds(db, filter, null, keywordHits(db, filter))
+  }
   throw new Error('没有指定要操作的题目')
 }
 
@@ -228,16 +224,17 @@ export function libraryFacets(db: DatabaseSync, rawFilter: FacetFilter): Library
   const answers = db.prepare('SELECT answer_html FROM questions WHERE answer_html IS NOT NULL').all() as { answer_html: string }[]
   const withAnswer = answers.filter((row) => hasVisibleContent(row.answer_html)).length
   const json = (ids: number[]): string => JSON.stringify(ids)
+  const hits = keywordHits(db, filter)
 
   // 题型
   const typeCounts = new Map<string, number>()
-  const typeIds = matchIds(db, filter, 'type')
+  const typeIds = matchIds(db, filter, 'type', hits)
   for (const r of db.prepare('SELECT question_type AS type, COUNT(*) AS n FROM questions WHERE id IN (SELECT value FROM json_each(?)) GROUP BY question_type').all(json(typeIds)) as { type: string; n: number }[]) {
     typeCounts.set(r.type, r.n)
   }
 
   // 章节：章包含其下各节；未归章节单列
-  const chapterIds = matchIds(db, filter, 'chapter')
+  const chapterIds = matchIds(db, filter, 'chapter', hits)
   const direct = new Map<number, number>()
   for (const r of db.prepare('SELECT chapter_id AS id, COUNT(*) AS n FROM question_chapter WHERE question_id IN (SELECT value FROM json_each(?)) GROUP BY chapter_id').all(json(chapterIds)) as { id: number; n: number }[]) {
     direct.set(r.id, r.n)
@@ -256,7 +253,7 @@ export function libraryFacets(db: DatabaseSync, rawFilter: FacetFilter): Library
   for (const id of selectedChapters) if (!chapterCounts.has(id)) chapters.push({ id, count: 0 })
 
   // 知识点：题多的在前
-  const knowledgeIds = matchIds(db, filter, 'knowledge')
+  const knowledgeIds = matchIds(db, filter, 'knowledge', hits)
   const knowledge = db
     .prepare(
       `SELECT kp.id, kp.name, kp.subject, COUNT(*) AS count FROM question_knowledge qk JOIN knowledge_points kp ON kp.id = qk.knowledge_id
@@ -272,7 +269,7 @@ export function libraryFacets(db: DatabaseSync, rawFilter: FacetFilter): Library
   knowledge.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh'))
 
   // 难度：档位只用 difficultyTier 换算
-  const difficultyIds = matchIds(db, filter, 'difficulty')
+  const difficultyIds = matchIds(db, filter, 'difficulty', hits)
   const tierCounts = new Map<DifficultyKey, number>()
   for (const r of db.prepare('SELECT coefficient AS d FROM question_difficulty WHERE question_id IN (SELECT value FROM json_each(?))').all(json(difficultyIds)) as { d: number }[]) {
     const tier = difficultyTier(r.d)
@@ -281,7 +278,7 @@ export function libraryFacets(db: DatabaseSync, rawFilter: FacetFilter): Library
   const difficulties = DIFFICULTY_TIERS.filter((t) => (tierCounts.get(t.key) ?? 0) > 0 || filter.difficulties?.includes(t.key)).map((t) => ({ key: t.key, count: tierCounts.get(t.key) ?? 0 }))
 
   // 标签
-  const tagIds = matchIds(db, filter, 'tag')
+  const tagIds = matchIds(db, filter, 'tag', hits)
   const tagCounts = new Map<number, number>()
   for (const r of db.prepare('SELECT tag_id AS id, COUNT(*) AS n FROM question_tags WHERE question_id IN (SELECT value FROM json_each(?)) GROUP BY tag_id').all(json(tagIds)) as { id: number; n: number }[]) {
     tagCounts.set(r.id, r.n)

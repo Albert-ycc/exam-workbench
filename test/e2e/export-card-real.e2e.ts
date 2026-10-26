@@ -25,7 +25,7 @@ const sh = (cmd: string, args: string[]): string => execFileSync(cmd, args, { en
 buildTo('out-export3')
 const dataDir = mkdtempSync(join(tmpdir(), 'ewb-real3-data-'))
 cpSync(real, dataDir, { recursive: true })
-const { app, window } = await launchApp({ outDir: 'out-export3', dataDir })
+const { app, window } = await launchApp({ outDir: 'out-export3', dataDir, online: true })
 
 try {
   const all = (await window.evaluate(() => window.workbench.library.listQuestions({ limit: 200 }))).items

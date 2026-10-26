@@ -1,7 +1,7 @@
 // 答题卡的内容规则：从版本快照得到「答题卡」的中间结构（按大题、按题型排出的块），渲染成 HTML 在 render-card-html.ts。
 // 纯函数，不依赖 Electron。题型分类沿用 document.ts 的作答区分类（answerAreaKind），分值说明沿用 shared/numbering.ts。
 import type { PaperSnapshot } from '../../shared/domain.ts'
-import { boxScoreLabel, numberItems, numberLabel, sectionScoreNote, structureOf, type NumberedItem } from '../../shared/numbering.ts'
+import { blockNos, boxScoreLabel, numberItems, numberLabel, sectionScoreNote, structureOf, type NumberedItem } from '../../shared/numbering.ts'
 import { LONG_UNDERLINE_MIN, WRITING_LINE_MM, answerAreaKind, exportHeadings, writingLineCount } from './document.ts'
 import { blockify, parseHtml, stripInvalidXmlChars, textContent, walk, type HNode } from './html-tree.ts'
 
@@ -146,7 +146,6 @@ interface Entry {
   stem: HNode[]
 }
 
-const nosOf = (n: NumberedItem): number[] => Array.from({ length: n.lastNo - n.firstNo + 1 }, (_, k) => n.firstNo + k)
 const chunk = <T>(list: T[], size: number): T[][] => Array.from({ length: Math.ceil(list.length / size) }, (_, k) => list.slice(k * size, (k + 1) * size))
 
 export function buildCardDocument(snapshot: PaperSnapshot): CardDocument {
@@ -182,10 +181,10 @@ export function buildCardDocument(snapshot: PaperSnapshot): CardDocument {
         const run = entries.slice(i, j)
         i = j
         if (entry.kind === 'choice') {
-          const rows = chunk(run.flatMap((e) => nosOf(e.n)), CARD_CONFIG.choicePerRow)
+          const rows = chunk(run.flatMap((e) => blockNos(e.n)), CARD_CONFIG.choicePerRow)
           for (const part of chunk(rows, CARD_CONFIG.choiceMaxRows)) blocks.push({ type: 'choice', heading: takeHeading(), rows: part })
         } else {
-          const items = run.flatMap((e) => (e.n.firstNo === e.n.lastNo ? [{ no: e.n.firstNo, lines: blankCount(e.stem) }] : nosOf(e.n).map((no) => ({ no, lines: 1 }))))
+          const items = run.flatMap((e) => (e.n.firstNo === e.n.lastNo ? [{ no: e.n.firstNo, lines: blankCount(e.stem) }] : blockNos(e.n).map((no) => ({ no, lines: 1 }))))
           for (const part of chunk(items, CARD_CONFIG.blankMaxCells)) blocks.push({ type: 'blank', heading: takeHeading(), items: part })
         }
         continue

@@ -1,12 +1,9 @@
-// 入库端到端测试的公用部分（不是独立的测试）：不出外网地启动应用，并用 test/fixtures 里的组卷网真实页面样本代替组卷网。
-// library.e2e.ts 与 pages.e2e.ts 共用。
+// 入库端到端测试的公用部分（不是独立的测试）：用 test/fixtures 里的组卷网真实页面样本代替组卷网。
+// library / import-classify / pages 三套共用。
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
-import { ROOT } from '../../scripts/e2e/app.ts'
+import type { ElectronApplication } from 'playwright'
 
 export const FIXTURES = resolve(import.meta.dirname, '../fixtures')
 export const PAPER_URL = 'https://zujuan.xkw.com/2p3543573.html'
@@ -14,26 +11,6 @@ export const QUESTION_URL = 'https://zujuan.xkw.com/2q17150767.html'
 export const ENGLISH_URL = 'https://zujuan.xkw.com/2p1111111.html'
 export const VERIFY_URL = ENGLISH_URL
 export const VERIFY_FOREVER_URL = 'https://zujuan.xkw.com/2p2222222.html'
-
-// 所有域名解析失败（127.0.0.1 除外）：采集页的内置浏览器在拦截生效前发出的请求也出不了网
-export async function launchOffline(options: { outDir: string; dataDir?: string; userDataDir?: string }): Promise<{ app: ElectronApplication; window: Page; dataDir: string; userDataDir: string }> {
-  const userDataDir = options.userDataDir ?? mkdtempSync(join(tmpdir(), 'ewb-e2e-user-'))
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), 'ewb-e2e-data-'))
-  mkdirSync(userDataDir, { recursive: true })
-  writeFileSync(join(userDataDir, 'config.json'), JSON.stringify({ dataDir }))
-  const executablePath = createRequire(import.meta.url)('electron') as unknown as string
-  // main 目录里有 package.json 时按应用目录启动，app.getVersion() 才是应用的版本号（按脚本路径启动读到的是 Electron 的）
-  const mainDir = join(resolve(ROOT, options.outDir), 'main')
-  const entry = existsSync(join(mainDir, 'package.json')) ? mainDir : join(mainDir, 'index.js')
-  const app = await electron.launch({
-    executablePath,
-    args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1', entry],
-    env: { ...process.env, EWB_USER_DATA: userDataDir, EWB_E2E: '1' }
-  })
-  const window = await app.firstWindow()
-  await window.waitForLoadState('domcontentloaded')
-  return { app, window, dataDir, userDataDir }
-}
 
 export async function installIntercept(app: ElectronApplication): Promise<void> {
   const answerImg = '<div class="item answer"><img src="https://staticzujuan.xkw.com/quesimg/Upload/answer/e2e-answer.png"></div>'

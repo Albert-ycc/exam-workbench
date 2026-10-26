@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDatabase } from '../src/main/db.ts'
+import { createCategory, setCategory } from '../src/main/papers/classify.ts'
+import { changeTags, createTag } from '../src/main/tags.ts'
 import {
   createPaper,
   createVersion,
@@ -214,6 +216,76 @@ try {
     assert.deepEqual(items.map((i) => i.stemHtml), ['A', 'B'])
     saveDraft(db, pid, getPaper(db, pid).draft)
     deletePaper(db, pid)
+  })
+
+  check('旧数据里重复的 id 换成确定的新 id：连续两次下载只产生一个版本', () => {
+    const pid = createPaper(db, '重复id')
+    const dup = { sections: [{ id: 's1', title: '', items: [item('x', 'A'), item('x', 'B'), item('x~2', 'C')] }, { id: 's1', title: '', items: [] }] }
+    db.prepare('UPDATE papers SET draft_json = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(dup), '2999-01-01T00:00:00.000Z', pid)
+    const ids = (): string[] => getPaper(db, pid).draft.sections.flatMap((sec) => [sec.id, ...sec.items.map((i) => i.id)])
+    assert.deepEqual(ids(), ids(), '同一份数据每次读出来一样')
+    assert.equal(new Set(ids()).size, ids().length, 'id 互不相同')
+    // updated_at 设在未来，快速路径不生效，走的是完整比对
+    assert.equal(ensureVersionForDownload(db, pid, 'n').created, true)
+    assert.equal(ensureVersionForDownload(db, pid, 'n').created, false)
+    assert.equal(listVersions(db, pid).length, 1)
+    deletePaper(db, pid)
+  })
+
+  check('草稿是否有改动：改草稿后有改动、存版本后没有、改标题后有、恢复版本后没有；分类与标签不影响', () => {
+    const pid = createPaper(db, '改动判断')
+    const dirty = (): boolean => getPaper(db, pid).draftDirty
+    const listedDirty = (): boolean => listPapers(db).find((p) => p.id === pid)!.draftDirty
+    saveDraft(db, pid, draftWith('A'))
+    assert.equal(dirty(), true)
+    createVersion(db, pid, 'manual', '')
+    assert.equal(dirty(), false)
+    assert.equal(listedDirty(), false)
+    saveDraft(db, pid, draftWith('B'))
+    assert.equal(dirty(), true)
+    assert.equal(listedDirty(), true)
+    const v2 = createVersion(db, pid, 'manual', '')
+    assert.equal(dirty(), false)
+    renamePaper(db, pid, '改动判断（新）')
+    assert.equal(dirty(), true)
+    saveDraft(db, pid, draftWith('C'))
+    restoreVersion(db, pid, v2.id)
+    assert.equal(dirty(), true, '有未存改动时恢复，先存了一版「恢复前」，草稿内容是 v2，和最新版本不同')
+    assert.equal(listedDirty(), true)
+    createVersion(db, pid, 'manual', '')
+    restoreVersion(db, pid, listVersions(db, pid)[0].id)
+    assert.equal(dirty(), false, '草稿没有改动时恢复到最新版本，内容不变')
+    assert.equal(listedDirty(), false)
+    const cat = createCategory(db, '分类甲')
+    setCategory(db, [pid], cat.id)
+    changeTags(db, 'paper', [pid], { add: [createTag(db, 'paper', '标签甲').id], remove: [] })
+    assert.equal(dirty(), false, '分类与标签不改试卷修改时间，也不算草稿改动')
+    // 同一毫秒内先存版本再改草稿：时间戳相等，必须走完整比对
+    saveDraft(db, pid, draftWith('D'))
+    db.prepare('UPDATE papers SET updated_at = (SELECT created_at FROM paper_versions WHERE paper_id = ? ORDER BY version_no DESC LIMIT 1) WHERE id = ?').run(pid, pid)
+    assert.equal(dirty(), true, '修改时间等于版本时间时不能走快速路径')
+    // 修改时间早于版本时间：直接判无改动，不再反序列化草稿
+    db.prepare("UPDATE papers SET updated_at = '2000-01-01T00:00:00.000Z' WHERE id = ?").run(pid)
+    assert.equal(dirty(), false)
+    deletePaper(db, pid)
+  })
+
+  check('下载记录按同一个路径规则去重（不分大小写的系统上目录大小写不同仍是一条）；版本说明限 100 字；副本标题保留后缀', () => {
+    const pid = createPaper(db, '杂项')
+    saveDraft(db, pid, draftWith('A'))
+    const v = createVersion(db, pid, 'manual', '长'.repeat(150))
+    assert.equal(Array.from(v.note).length, 100)
+    recordExport(db, v.id, 'pdf', options, '/tmp/Ewb-Case/卷.pdf')
+    recordExport(db, v.id, 'pdf', options, '/tmp/ewb-case/卷.pdf')
+    assert.equal(getVersion(db, v.id).exports.length, process.platform === 'linux' ? 2 : 1)
+    recordExport(db, v.id, 'pdf', options, '/tmp/ewb-case/卷.pdf', 'answer-sheet')
+    assert.equal(getVersion(db, v.id).exports.length, process.platform === 'linux' ? 3 : 2, '类型不同是另一条记录')
+    const long = createPaper(db, '题'.repeat(100))
+    const copy = getPaper(db, duplicatePaper(db, long))
+    assert.equal(Array.from(copy.title).length, 100)
+    assert.ok(copy.title.endsWith('（副本）'))
+    deletePaper(db, pid)
+    deletePaper(db, long)
   })
 
   check('删除试卷连带删除版本与下载记录', () => {

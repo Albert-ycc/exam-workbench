@@ -10,9 +10,8 @@ import { useEffect, useState } from 'react'
 import type { Chapter, Tag, TagRef } from '@shared/classify'
 import { IconChevronDown } from '../../icons'
 import { TagPicker } from '../classify'
-import { Button, Popover, toast } from '../ui'
+import { Button, Popover, errorMessage, toast } from '../ui'
 import ChapterPicker from './ChapterPicker'
-import { errorMessage } from './format'
 import './library.css'
 
 export interface TagStates {

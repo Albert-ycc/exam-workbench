@@ -265,10 +265,13 @@
   flex: 1;
   min-width: 0;
   margin-right: auto;
-  color: var(--red-2);
+  color: var(--warn);
   font-size: 13px;
   line-height: 1.4;
   text-align: left;
+}
+.dl-foot-note.is-block {
+  color: var(--red-2);
 }
 
 /* 矮窗口（1000×640 一类）：整张表单要放进 480px 左右的可视高度，控件与说明都收紧 */

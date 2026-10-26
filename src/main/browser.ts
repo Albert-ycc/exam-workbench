@@ -25,6 +25,8 @@ export function collectSession(): Session {
 // 固定为 2 让入库的公式图是矢量图，打印清晰
 export async function prepareCollectSession(): Promise<void> {
   const ses = collectSession()
+  // 组卷网用不到地理位置、通知、摄像头等权限，一律拒绝
+  ses.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   ses.cookies.on('changed', (_event, cookie, _cause, removed) => {
     const host = (cookie.domain ?? '').replace(/^\./, '')
     if (removed || !cookie.session || !LOGIN_COOKIE_DOMAIN.test(host)) return
@@ -75,7 +77,8 @@ function cookieToDetails(cookie: Cookie, host: string): Electron.CookiesSetDetai
 export function normalizeAddress(input: string): string | null {
   const text = input.trim()
   if (!text) return null
-  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`
+  // 只有 scheme:// 才算带协议：example.com:8080/x 的「example.com:」是主机加端口
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`
   try {
     const url = new URL(candidate)
     return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null
@@ -189,8 +192,14 @@ export class CollectBrowser {
     })
 
     // 只允许打开网页地址，拦截 weixin:// 等外部协议
-    contents.on('will-navigate', (event, url) => {
+    const webOnly = (event: { preventDefault: () => void }, url: string): void => {
       if (!isWebUrl(url)) event.preventDefault()
+    }
+    contents.on('will-navigate', webOnly)
+    // 第三方登录弹窗同样只许网页地址，且不能再开窗
+    contents.on('did-create-window', (child) => {
+      child.webContents.on('will-navigate', webOnly)
+      child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     })
     // 普通新标签链接在当前视图打开；带窗口尺寸的弹窗（多见于第三方登录）作为独立窗口打开，共用同一会话
     contents.setWindowOpenHandler(({ url, disposition }) => {

@@ -4,18 +4,18 @@
 // 试卷库的列表、试题库的「加入试卷」菜单都要避开已藏起来的试卷，所以统一从这里取。
 import { useSyncExternalStore } from 'react'
 import type { PaperSummary } from '@shared/domain'
-import { toast } from '../ui'
-import { errorMessage } from './format'
+import { errorMessage, toast } from '../ui'
 
 export const UNDO_MS = 8000
 
 interface Pending {
   paper: PaperSummary
   timer: number
-  toastId: number
 }
 
 const pending = new Map<number, Pending>()
+// 同一时刻所有待删试卷共用的那条提示
+let toastId = 0
 let hidden: ReadonlySet<number> = new Set()
 // 每执行完一次真正的删除加一：试卷库据此重新读取列表
 let executed = 0
@@ -37,7 +37,6 @@ function undo(id: number): void {
 async function execute(id: number): Promise<void> {
   const item = pending.get(id)
   if (!item) return
-  toast.dismiss(item.toastId)
   try {
     await window.workbench.papers.remove(id)
   } catch (error) {
@@ -45,14 +44,20 @@ async function execute(id: number): Promise<void> {
   }
   pending.delete(id)
   executed++
+  // 提示条是各份待删试卷共用的一条，还有别的试卷在倒计时就留着，它的撤销入口还要用
+  if (pending.size === 0) toast.dismiss(toastId)
   emit()
 }
 
 export const paperTrash = {
   schedule(paper: PaperSummary): void {
     if (pending.has(paper.id)) return
-    const toastId = toast.show(`已删除「${paper.title}」`, { ms: UNDO_MS, action: { label: '撤销', run: () => undo(paper.id) } })
-    pending.set(paper.id, { paper, toastId, timer: window.setTimeout(() => void execute(paper.id), UNDO_MS) })
+    toastId = toast.show((n) => (n > 1 ? `已删除 ${n} 份试卷` : `已删除「${paper.title}」`), {
+      ms: UNDO_MS,
+      group: 'paper-trash',
+      action: { label: (n) => (n > 1 ? '撤销全部' : '撤销'), run: () => undo(paper.id) }
+    })
+    pending.set(paper.id, { paper, timer: window.setTimeout(() => void execute(paper.id), UNDO_MS) })
     emit()
   },
   isHidden: (id: number): boolean => hidden.has(id)

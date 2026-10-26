@@ -8,7 +8,7 @@
 //   toast.show((n) => `已删除 ${n} 道题`, { group: 'delete-question', action: { label: (n) => (n > 1 ? '撤销全部' : '撤销'), run: undo } })
 // toast.dismiss(id) / toast.dismissAll()                            show 返回提示的 id
 //
-// 同时最多显示 2 条：再来新的就把最早的一条顶掉。被顶掉的提示即使带「撤销」，它的撤销回调也不执行（与超时消失一致，删除照常生效）。
+// 同时最多显示 2 条：再来新的就顶掉一条，优先顶没有动作按钮的，都带动作时才顶最早的。被顶掉的提示即使带「撤销」，它的撤销回调也不执行（与超时消失一致，删除照常生效）。
 // 文字相同、类型相同的提示合并成一条并重新计时，不叠第二份；带动作按钮时以后发的那一条的动作为准。
 // 鼠标悬停或焦点在提示上时暂停计时。弹窗打开时提示自动避开弹窗（N9）：弹窗上方放得下就放在上方，
 // 否则放弹窗下方，再不行放在弹窗标题栏下面，任何情况下都不压住弹窗页脚。
@@ -109,8 +109,13 @@ function show(text: Dynamic<string>, options: ToastOptions = {}): number {
     return existing.id
   }
   const id = ++seq
-  // 超出上限时最早的被顶掉：只清计时，不执行它的动作
-  items = [...items, { id, tone, count: 1, text, actionLabel: options.action?.label, runs: options.action ? [options.action.run] : [], group: options.group, ms }].slice(-MAX)
+  // 被顶掉的只清计时，不执行它的动作
+  items = [...items, { id, tone, count: 1, text, actionLabel: options.action?.label, runs: options.action ? [options.action.run] : [], group: options.group, ms }]
+  while (items.length > MAX) {
+    // 带撤销的提示是用户唯一的反悔入口，没有动作的先让位
+    const victim = items.slice(0, -1).find((item) => item.runs.length === 0) ?? items[0]
+    items = items.filter((item) => item !== victim)
+  }
   for (const key of Array.from(timers.keys())) if (!items.some((item) => item.id === key)) dismiss(key)
   emit()
   arm(id, ms)

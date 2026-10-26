@@ -7,15 +7,15 @@ import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildTo } from '../../scripts/e2e/app.ts'
-import { ENGLISH_URL, FIXTURES, installIntercept, launchOffline, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
+import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
+import { ENGLISH_URL, FIXTURES, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
 const PHYSICS_URL = 'https://zujuan.xkw.com/4p9000002.html'
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-import-classify-'))
 mkdirSync(evidence, { recursive: true })
 process.env.EWB_IMPORT_GAP_MS = '300'
 buildTo('out-import3')
-const { app, window } = await launchOffline({ outDir: 'out-import3' })
+const { app, window } = await launchApp({ outDir: 'out-import3' })
 
 let step = 0
 const log = (text: string): void => console.log(`  ✓ ${++step}. ${text}`)

@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react'
 import type { PaperSummary } from '@shared/domain'
 import { navigateTo } from '../../navigation'
 import { IconSearch } from '../../icons'
-import { Button, EmptyState, Modal, TextInput } from '../ui'
-import { formatTime, structureLine } from './format'
+import { Button, EmptyState, Modal, TextInput, formatTime } from '../ui'
+import { structureLine } from './format'
 import './library.css'
 
 interface Props {

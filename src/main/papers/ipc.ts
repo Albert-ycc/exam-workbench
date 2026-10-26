@@ -2,6 +2,7 @@
 import { ipcMain } from 'electron'
 import { PAPERS_IPC, type PaperEdits } from '@shared/papers'
 import type { AppContext } from '../context'
+import { makeGuard, optionalId, toId, toIds } from '../ipc-guard'
 import { changeTags, createTag, deleteTag, listTags, renameTag } from '../tags'
 import { createCategory, deleteCategory, listCategories, moveCategory, renameCategory, setCategory } from './classify'
 import { pickImage } from './images'
@@ -21,21 +22,9 @@ import {
 } from './repo'
 
 export function registerPapersIpc(ctx: AppContext): void {
-  const guard =
-    <A extends unknown[], R>(fn: (...args: A) => R) =>
-    (event: Electron.IpcMainInvokeEvent, ...args: A): R => {
-      if (!ctx.fromMainWindow(event)) throw new Error('拒绝来自非主窗口的请求')
-      return fn(...args)
-    }
-  // 试卷、版本的 id 只认正整数：true、[1]、'1abc' 这类值不能被 Number() 悄悄转成某份试卷
-  const toId = (value: unknown, what = '试卷'): number => {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${what} id 不正确`)
-    return value
-  }
+  const guard = makeGuard(ctx)
 
   ipcMain.handle(PAPERS_IPC.list, guard(() => listPapers(ctx.db())))
-  const toIds = (value: unknown, what = '试卷'): number[] => (Array.isArray(value) ? value.map((v) => toId(v, what)) : [])
-  const optionalId = (value: unknown, what: string): number | null => (value == null ? null : toId(value, what))
 
   ipcMain.handle(
     PAPERS_IPC.create,

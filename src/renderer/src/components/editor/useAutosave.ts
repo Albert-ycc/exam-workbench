@@ -1,7 +1,7 @@
 // 草稿与标题的防抖自动保存。所有写入走同一条串行队列，离开页面或关闭窗口前把没写的改动写掉。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PaperEdits, PaperSaveResult } from '@shared/papers'
-import { errorMessage } from './format'
+import { errorMessage, toast } from '../ui'
 
 export type SaveState = 'saved' | 'pending' | 'saving' | 'error'
 
@@ -76,7 +76,8 @@ export function useAutosave(paperId: number, onSaved: (result: PaperSaveResult) 
       window.removeEventListener('beforeunload', onUnload)
       // 切换页面（返回试卷库、换到别的菜单）时把没写的改动写掉
       window.clearTimeout(timer.current)
-      void flush().catch(() => undefined)
+      // 组件已卸载，状态条看不到了；toast 是模块级的，仍能告诉用户这次没存上
+      void flush().catch((error) => toast.error(`草稿没有保存成功，改动已丢失：${errorMessage(error)}`))
     }
   }, [paperId, flush])
 

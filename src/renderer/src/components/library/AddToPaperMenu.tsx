@@ -2,8 +2,7 @@
 // 菜单只负责选；真正加入（取草稿、放置、保存）在 addToPaper.ts，由页面调用。
 import type { PaperSummary } from '@shared/domain'
 import { IconChevronDown } from '../../icons'
-import { Button, Menu, type MenuEntry } from '../ui'
-import { clip } from './format'
+import { Button, Menu, clip, type MenuEntry } from '../ui'
 
 interface Props {
   recent: PaperSummary[] // 已按最近编辑排好，只取前 3 份

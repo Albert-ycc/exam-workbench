@@ -1,7 +1,7 @@
 // 题干 / 答案的就地编辑区（contenteditable）。
 // 载入后不再由 React 回写 DOM，内容变化时把净化后的 HTML 交给 onChange；输入法组合过程中不会被打断。
 import { useLayoutEffect, useRef, useState } from 'react'
-import { errorMessage } from './format'
+import { errorMessage } from '../ui'
 import { fromEditable, toEditableHtml } from './html'
 
 interface Props {

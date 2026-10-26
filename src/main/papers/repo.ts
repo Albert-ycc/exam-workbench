@@ -1,6 +1,5 @@
 // 试卷、版本、下载记录的数据操作。不依赖 Electron，可在 node 测试里直接用。
 // 规则：草稿实时保存不算版本；版本只增不改；草稿与最新版本内容相同时视为「无改动」。
-import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type {
   DraftSection,
@@ -19,6 +18,7 @@ import type {
   VersionSummary
 } from '@shared/domain'
 import { MAX_NUMBER_COUNT, normalizeScore, structureOf } from '../../shared/numbering.ts'
+import { samePath } from '../export/file-name.ts'
 import { copyTags, tagsOf } from '../tags.ts'
 import { assertCategory } from './classify.ts'
 
@@ -55,6 +55,8 @@ const now = (): string => new Date().toISOString()
 
 // 试卷标题上限 100 字（同时用于下载文件名，超长标题会让列表和文件名不可用）
 export const TITLE_MAX = 100
+// 版本说明上限 100 字，与编辑器输入框一致
+const NOTE_MAX = 100
 function cleanTitle(title: string): string {
   return Array.from(title.trim()).slice(0, TITLE_MAX).join('')
 }
@@ -99,7 +101,8 @@ function withScore<K extends 'score' | 'defaultScore'>(key: K, value: unknown): 
 }
 
 // 大题 id、题目 id 在整份试卷里必须唯一，编辑器按 id 定位改哪一道。
-// 编辑器送来的草稿遇到重复直接拒绝（reject）；库里读出的旧数据给重复的那一份换新 id（repair），保证还能打开
+// 编辑器送来的草稿遇到重复直接拒绝（reject）；库里读出的旧数据给重复的那一份换新 id（repair），保证还能打开。
+// 换的 id 由原 id 加序号派生而不是随机：同一份数据每次读出来都一样，否则草稿永远和最新版本对不上
 type DuplicateIds = 'reject' | 'repair'
 
 function normalizeSections(raw: unknown, duplicates: DuplicateIds = 'repair'): DraftSection[] {
@@ -111,7 +114,9 @@ function normalizeSections(raw: unknown, duplicates: DuplicateIds = 'repair'): D
       return id
     }
     if (duplicates === 'reject') throw new Error(`草稿格式不正确：${what} id 重复（${id}）`)
-    const fresh = randomUUID()
+    let n = 2
+    while (seen.has(`${id}~${n}`)) n++
+    const fresh = `${id}~${n}`
     seen.add(fresh)
     return fresh
   }
@@ -163,6 +168,10 @@ function latestVersionRow(db: DatabaseSync, paperId: number): VersionRow | undef
 
 export function isDraftDirty(db: DatabaseSync, paperId: number): boolean {
   const row = paperRow(db, paperId)
+  // 草稿自最新版本之后没写过就一定没改动，免得列表里每份试卷都整份反序列化比对。
+  // 必须严格早于：同一毫秒内先存版本再改草稿的，时间戳相等，要走完整比对
+  const stamp = db.prepare('SELECT created_at FROM paper_versions WHERE paper_id = ? ORDER BY version_no DESC LIMIT 1').get(paperId) as { created_at: string } | undefined
+  if (stamp && row.updated_at < stamp.created_at) return false
   const latest = latestVersionRow(db, paperId)
   return !latest || snapshotJson(row.title, parseDraft(row.draft_json)) !== latest.snapshot_json
 }
@@ -289,7 +298,7 @@ export function createVersion(db: DatabaseSync, paperId: number, origin: Version
     const nextNo = (latestVersionRow(db, paperId)?.version_no ?? 0) + 1
     const result = db
       .prepare('INSERT INTO paper_versions (paper_id, version_no, note, origin, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(paperId, nextNo, note.trim(), origin, snapshotJson(row.title, parseDraft(row.draft_json)), now())
+      .run(paperId, nextNo, Array.from(note.trim()).slice(0, NOTE_MAX).join(''), origin, snapshotJson(row.title, parseDraft(row.draft_json)), now())
     const version = db.prepare('SELECT * FROM paper_versions WHERE id = ?').get(Number(result.lastInsertRowid)) as unknown as VersionRow
     return toSummary(db, version)
   })
@@ -332,6 +341,7 @@ export function restoreVersion(db: DatabaseSync, paperId: number, versionId: num
 }
 
 // 另存为新试卷：从当前草稿或某个历史版本复制出一份新试卷，新试卷没有版本，从 v1 开始；分类与标签一起复制
+const COPY_SUFFIX = '（副本）'
 export function duplicatePaper(db: DatabaseSync, sourcePaperId: number, options: { versionId?: number; title?: string } = {}): number {
   return transaction(db, () => {
     const source = paperRow(db, sourcePaperId)
@@ -343,7 +353,8 @@ export function duplicatePaper(db: DatabaseSync, sourcePaperId: number, options:
       title = version.snapshot.title
       draft = { sections: normalizeSections(version.snapshot.sections) }
     }
-    const id = createPaper(db, options.title?.trim() ? options.title : `${title}（副本）`, { categoryId: source.category_id })
+    // 标题先截出放得下后缀的长度，免得 cleanTitle 把「（副本）」截掉一半
+    const id = createPaper(db, options.title?.trim() ? options.title : `${Array.from(title.trim()).slice(0, TITLE_MAX - COPY_SUFFIX.length).join('')}${COPY_SUFFIX}`, { categoryId: source.category_id })
     db.prepare('UPDATE papers SET draft_json = ? WHERE id = ?').run(JSON.stringify(draft), id)
     copyTags(db, 'paper', sourcePaperId, id)
     return id
@@ -361,9 +372,9 @@ export function recordExport(
   kind: ExportKind = 'paper'
 ): ExportRecord {
   // 同一版本再次下载到同一个文件会覆盖它：沿用那条记录、更新时间与配置，版本历史里不出现两条指向同一文件的记录
-  const existing = db.prepare('SELECT id FROM exports WHERE version_id = ? AND kind = ? AND file_path = ? ORDER BY id DESC LIMIT 1').get(versionId, kind, filePath) as
-    | { id: number }
-    | undefined
+  // 路径比较与下载时选文件名用同一个规则（不分大小写），不在 SQL 里按字面相等比
+  const candidates = db.prepare('SELECT id, file_path FROM exports WHERE version_id = ? AND kind = ? ORDER BY id DESC').all(versionId, kind) as unknown as { id: number; file_path: string }[]
+  const existing = candidates.find((r) => samePath(r.file_path, filePath))
   let id: number
   if (existing) {
     db.prepare('UPDATE exports SET format = ?, options_json = ?, created_at = ? WHERE id = ?').run(format, JSON.stringify(options), now(), existing.id)

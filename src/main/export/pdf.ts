@@ -41,7 +41,12 @@ async function withPrintWindow(html: string, print: (win: BrowserWindow) => Prom
   } finally {
     if (timer) clearTimeout(timer)
     win.destroy()
-    rmSync(dir, { recursive: true, force: true })
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch (error) {
+      // 临时目录清不掉不该盖掉已生成的结果
+      console.warn('清理 PDF 临时目录失败：', error)
+    }
   }
 }
 

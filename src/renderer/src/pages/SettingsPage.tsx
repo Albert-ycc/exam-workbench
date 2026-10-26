@@ -1,8 +1,7 @@
 // 设置：版本号、数据目录、默认下载位置、快捷键说明
 import { useEffect, useState } from 'react'
 import type { DataDirInfo } from '@shared/api'
-import { errorMessage } from '../components/library/format'
-import { Button, Tag, toast } from '../components/ui'
+import { Button, Tag, errorMessage, toast } from '../components/ui'
 import './SettingsPage.css'
 
 // 与编辑器里实际生效的快捷键一一对应
@@ -37,7 +36,7 @@ export default function SettingsPage() {
   const [downloadDir, setDownloadDir] = useState<string | null>(null)
 
   useEffect(() => {
-    void window.workbench.data.info().then(setInfo)
+    void window.workbench.data.info().then(setInfo, (e) => toast.error(`读取数据目录失败：${errorMessage(e)}`))
     void window.workbench.exporter.getDefaults().then((d) => setDownloadDir(d.directory), () => undefined)
   }, [])
 
@@ -52,6 +51,14 @@ export default function SettingsPage() {
       toast.show('默认下载位置已更改')
     } catch (e) {
       toast.error(`更改默认下载位置失败：${errorMessage(e)}`)
+    }
+  }
+
+  const runData = async (action: () => Promise<unknown>, failed: string): Promise<void> => {
+    try {
+      await action()
+    } catch (e) {
+      toast.error(`${failed}：${errorMessage(e)}`)
     }
   }
 
@@ -88,8 +95,8 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="st-actions">
-              <Button onClick={() => void window.workbench.data.openFolder()}>打开文件夹</Button>
-              <Button onClick={() => void window.workbench.data.changeFolder()}>更改位置…</Button>
+              <Button onClick={() => void runData(() => window.workbench.data.openFolder(), '打开文件夹失败')}>打开文件夹</Button>
+              <Button onClick={() => void runData(() => window.workbench.data.changeFolder(), '更改数据目录失败')}>更改位置…</Button>
             </div>
           </div>
         </section>

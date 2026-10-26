@@ -12,7 +12,7 @@ const LOGIN_LABEL: Record<LoginState, string> = {
   unknown: '登录状态检测中'
 }
 
-const LOGIN_TONE = { 'logged-in': 'ok', 'logged-out': 'warn', unknown: 'plain' } as const
+const LOGIN_TONE = { 'logged-in': 'plain', 'logged-out': 'warn', unknown: 'plain' } as const
 
 const EMPTY_STATE: BrowserState = {
   url: '',

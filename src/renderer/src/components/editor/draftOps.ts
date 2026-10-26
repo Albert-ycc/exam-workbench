@@ -2,9 +2,7 @@
 // 一律保留草稿上 sections 以外的字段（目标满分），所以都经过 withSections。
 import type { DraftSection, PaperDraft, PaperItem } from '@shared/domain'
 import { normalizeScore } from '@shared/numbering'
-import { copyFromQuestion, newId, sectionTitleFor } from '@shared/draft'
-
-export { copyFromQuestion, newId, sectionTitleFor }
+import { newId, sectionTitleFor } from '@shared/draft'
 
 const withSections = (draft: PaperDraft, sections: DraftSection[]): PaperDraft => ({ ...draft, sections })
 

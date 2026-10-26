@@ -5,8 +5,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { CLASS_NAME_MAX, classNameLength, cleanClassName, type Chapter } from '@shared/classify'
 import { IconDown, IconEdit, IconPlus, IconTrash, IconUp } from '../../icons'
-import { Button, ConfirmDialog, EmptyState, Modal, TextInput } from '../ui'
-import { errorMessage } from './format'
+import { Button, ConfirmDialog, EmptyState, Modal, TextInput, errorMessage } from '../ui'
 import './library.css'
 
 interface Props {

@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXPORT_IPC } from '@shared/export'
 import type { AppContext } from '../context'
+import { makeGuard, toId } from '../ipc-guard'
 import { buildDocx, collectMeasureRequests } from './docx'
 import { prepareWordImages, upscaleSmallImagesForPrint } from './images'
 import { measureTexts } from './measure'
@@ -34,11 +35,9 @@ export function registerExportIpc(ctx: AppContext): void {
     }
   })
 
+  const guard = makeGuard(ctx)
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R | Promise<R>): void => {
-    ipcMain.handle(channel, (event, ...args: unknown[]) => {
-      if (!ctx.fromMainWindow(event)) throw new Error('拒绝来自非主窗口的请求')
-      return fn(...(args as A))
-    })
+    ipcMain.handle(channel, guard(fn))
   }
 
   handle(EXPORT_IPC.getDefaults, () => service.getDefaults())
@@ -53,10 +52,10 @@ export function registerExportIpc(ctx: AppContext): void {
     return picked.canceled ? null : (picked.filePaths[0] ?? null)
   })
   handle(EXPORT_IPC.setDefaultDirectory, (directory: string) => service.setDefaultDirectory(directory))
-  handle(EXPORT_IPC.previewFileName, (paperId: number, options: unknown, kind: unknown, directory?: string) => service.previewFileName(Number(paperId), options, kind, directory))
-  handle(EXPORT_IPC.checkExport, (paperId: number, options: unknown, kind: unknown) => service.checkExport(Number(paperId), options, kind))
-  handle(EXPORT_IPC.exportPaper, (request: Parameters<typeof service.exportPaper>[0]) => service.exportPaper(request))
-  handle(EXPORT_IPC.reexport, (exportId: number) => service.reexport(Number(exportId)))
+  handle(EXPORT_IPC.previewFileName, (paperId: number, options: unknown, kind: unknown, directory?: string) => service.previewFileName(toId(paperId), options, kind, directory))
+  handle(EXPORT_IPC.checkExport, (paperId: number, options: unknown, kind: unknown) => service.checkExport(toId(paperId), options, kind))
+  handle(EXPORT_IPC.exportPaper, (request: Parameters<typeof service.exportPaper>[0]) => service.exportPaper({ ...request, paperId: toId(request?.paperId) }))
+  handle(EXPORT_IPC.reexport, (exportId: number) => service.reexport(toId(exportId, '下载记录')))
   handle(EXPORT_IPC.showInFolder, (filePath: string) => {
     if (typeof filePath !== 'string' || !service.isRecordedPath(filePath)) throw new Error('只能打开下载记录里的文件')
     if (!existsSync(filePath)) throw new Error('文件已被移动或删除')

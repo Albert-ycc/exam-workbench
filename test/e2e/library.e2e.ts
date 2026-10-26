@@ -1,22 +1,22 @@
 // 入库与试题库端到端测试：粘贴链接 → 预览 → 确认 → 试题库筛选 / 展开答案 / 删除 → 同一链接再入全部跳过 → 整页入库
-// 用法：node test/e2e/library.e2e.ts [offline|online] [证据目录]
-//   offline（默认）：拦截内置浏览器会话的 https 请求，用本地样本页代替组卷网，不产生任何外网访问；
+// 用法：node test/e2e/library.e2e.ts [证据目录] [--online]（也可设环境变量 EWB_LIBRARY_ONLINE=1 代替 --online）
+//   离线（默认）：拦截内置浏览器会话的 https 请求，用本地样本页代替组卷网，不产生任何外网访问；
 //                    另外覆盖验证页暂停与取消、答案图片、无效链接
-//   online：真实打开组卷网的试卷页与单题页，共 4 次页面加载（入库 2 次、再入一次 2 次）
+//   --online：真实打开组卷网的试卷页与单题页，共 4 次页面加载（入库 2 次、再入一次 2 次）
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
-import { installIntercept, launchOffline, PAPER_URL, QUESTION_URL, VERIFY_FOREVER_URL, VERIFY_URL } from './library-intercept.e2e.ts'
+import { installIntercept, PAPER_URL, QUESTION_URL, VERIFY_FOREVER_URL, VERIFY_URL } from './library-intercept.e2e.ts'
 
-const mode = process.argv[2] === 'online' ? 'online' : 'offline'
-const evidence = process.argv[3] ?? mkdtempSync(join(tmpdir(), 'ewb-library-e2e-'))
+const mode = process.argv.includes('--online') || process.env.EWB_LIBRARY_ONLINE === '1' ? 'online' : 'offline'
+const evidence = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? mkdtempSync(join(tmpdir(), 'ewb-library-e2e-'))
 mkdirSync(evidence, { recursive: true })
 if (mode === 'offline') process.env.EWB_IMPORT_GAP_MS = '300'
 buildTo('out-lib3')
 // 离线模式：域名解析全部屏蔽，采集页在拦截生效前发出的请求也出不了网；online 模式才真正访问组卷网
-const { app, window, dataDir } = await (mode === 'offline' ? launchOffline({ outDir: 'out-lib3' }) : launchApp({ outDir: 'out-lib3' }))
+const { app, window, dataDir } = await launchApp({ outDir: 'out-lib3', online: mode === 'online' })
 const shot = (name: string): Promise<Buffer> => window.screenshot({ path: join(evidence, `${mode}-${name}.png`) })
 let step = 0
 const log = (text: string): void => console.log(`  ✓ ${++step}. ${text}`)

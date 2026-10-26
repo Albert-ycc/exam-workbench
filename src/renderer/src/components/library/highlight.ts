@@ -12,6 +12,8 @@ export function highlightHtml(html: string, keyword: string): string {
   let hit = false
   for (const text of texts) {
     const value = text.data
+    // 个别字符转小写后长度会变（如 İ），按小写串算出的位置对不上原文，这个节点不高亮
+    if (value.toLowerCase().length !== value.length) continue
     const at = value.toLowerCase().indexOf(lower)
     if (at === -1) continue
     hit = true

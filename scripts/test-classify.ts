@@ -269,6 +269,162 @@ try {
     assert.deepEqual(f.types.map((t) => [t.type, t.count]).sort(), [['单选题', 2], ['解答题-计算题', 1]])
   })
 
+  check('随机条件组合：筛选、分页、各项题数与朴素的逐题过滤实现完全一致（含关键词）', () => {
+    const dir2 = mkdtempSync(join(tmpdir(), 'ewb-classify-rand-'))
+    const rdb = openDatabase(dir2)
+    try {
+      let seed = 20261026
+      const rand = (): number => {
+        seed = (seed + 0x6d2b79f5) | 0
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+      }
+      const pick = <T>(list: T[]): T => list[Math.floor(rand() * list.length)]
+      const sample = <T>(list: T[], max: number): T[] => list.filter(() => rand() < 0.4).slice(0, max)
+      const stamp = new Date().toISOString()
+      for (let p = 1; p <= 4; p++) rdb.prepare('INSERT INTO source_papers (url, title, fetched_at) VALUES (?, ?, ?)').run(`https://zujuan.xkw.com/2p${p}.html`, `卷${p}`, stamp)
+      const types = ['单选题', '填空题', '解答题-计算题', '解答题-证明题', '']
+      const words = ['有理数', '方程', '<i>OA</i>．', '函数 f(x)', '三角形', '&amp; 与 &lt;b&gt;', 'ABC']
+      const insertQ = rdb.prepare('INSERT INTO questions (zujuan_qid, source_paper_id, source_order, question_type, stem_html, fingerprint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      const qids: number[] = []
+      for (let i = 1; i <= 400; i++) {
+        const stem = `<p>第${i}题 ${pick(words)} <img src="ewb-asset://${'a'.repeat(64)}.svg"> ${pick(words)}</p>`
+        qids.push(Number(insertQ.run(`r${i}`, 1 + Math.floor(rand() * 4), Math.floor(rand() * 30), pick(types), stem, `rfp${i}`, stamp).lastInsertRowid))
+      }
+      const chapters: { id: number; parent: number | null }[] = []
+      for (let c = 1; c <= 3; c++) {
+        const top = createChapter(rdb, `章${c}`)
+        chapters.push({ id: top.id, parent: null })
+        for (let k = 1; k <= 2; k++) chapters.push({ id: createChapter(rdb, `节${c}.${k}`, top.id).id, parent: top.id })
+      }
+      for (const id of qids) if (rand() < 0.7) assignChapter(rdb, [id], pick(chapters).id)
+      const kps = Array.from({ length: 8 }, (_, i) => ({ id: 5000 + i, name: `知识点${i}`, subject: 'czsx' }))
+      for (const id of qids) saveQuestionMeta(rdb, id, { knowledge: sample(kps, 3), difficulty: rand() < 0.8 ? Math.round(rand() * 100) / 100 : null })
+      const tagIds = ['甲', '乙', '丙', '丁', '戊'].map((name) => createTag(rdb, 'question', name).id)
+      for (const id of qids) {
+        const chosen = sample(tagIds, 3)
+        if (chosen.length) changeTags(rdb, 'question', [id], { add: chosen })
+      }
+
+      // 朴素实现：把附表整张读进 JS，逐题判断
+      const rows = rdb.prepare('SELECT id, source_paper_id AS sp, source_order AS so, question_type AS type, stem_html AS stem FROM questions').all() as { id: number; sp: number; so: number; type: string; stem: string }[]
+      const group = (sql: string): Map<number, number[]> => {
+        const m = new Map<number, number[]>()
+        for (const r of rdb.prepare(sql).all() as { q: number; v: number }[]) m.set(r.q, [...(m.get(r.q) ?? []), r.v])
+        return m
+      }
+      const chapterOf = group('SELECT question_id AS q, chapter_id AS v FROM question_chapter')
+      const knowledgeOf = group('SELECT question_id AS q, knowledge_id AS v FROM question_knowledge')
+      const tagOf = group('SELECT question_id AS q, tag_id AS v FROM question_tags')
+      const coefOf = new Map((rdb.prepare('SELECT question_id AS q, coefficient AS c FROM question_difficulty').all() as { q: number; c: number }[]).map((r) => [r.q, r.c]))
+      const parentOf = new Map(chapters.map((c) => [c.id, c.parent]))
+      const textOf = (html: string): string =>
+        html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ').toLowerCase()
+      type F = { questionType?: string; sourcePaperId?: number; keyword?: string; ids?: number[]; chapterIds?: number[]; knowledgeIds?: number[]; difficulties?: ('easy' | 'medium' | 'hard')[]; tagIds?: number[] }
+      type Row = (typeof rows)[number]
+      const passes = (r: Row, f: F, skip: string | null): boolean => {
+        if (skip !== 'type' && f.questionType && !(r.type === f.questionType || r.type.startsWith(f.questionType + '-'))) return false
+        if (f.sourcePaperId !== undefined && r.sp !== f.sourcePaperId) return false
+        if (f.ids && !f.ids.includes(r.id)) return false
+        if (f.keyword && !textOf(r.stem).includes(f.keyword.replace(/\s+/g, ' ').toLowerCase())) return false
+        if (skip !== 'chapter' && f.chapterIds) {
+          const own = chapterOf.get(r.id) ?? []
+          const hit = f.chapterIds.some((c) => (c === NO_CHAPTER ? own.length === 0 : own.some((o) => o === c || parentOf.get(o) === c)))
+          if (!hit) return false
+        }
+        if (skip !== 'knowledge' && f.knowledgeIds && !(knowledgeOf.get(r.id) ?? []).some((k) => f.knowledgeIds!.includes(k))) return false
+        if (skip !== 'difficulty' && f.difficulties) {
+          const tier = difficultyTier(coefOf.get(r.id))
+          if (!tier || !f.difficulties.includes(tier.key)) return false
+        }
+        if (skip !== 'tag' && f.tagIds && !(tagOf.get(r.id) ?? []).some((t) => f.tagIds!.includes(t))) return false
+        return true
+      }
+      const ordered = [...rows].sort((a, b) => b.sp - a.sp || a.so - b.so || a.id - b.id)
+      const naiveIds = (f: F, skip: string | null = null): number[] => ordered.filter((r) => passes(r, f, skip)).map((r) => r.id)
+      const kpName = new Map(kps.map((k) => [k.id, k.name]))
+
+      const randomFilter = (): F => {
+        const f: F = {}
+        if (rand() < 0.3) f.questionType = pick(['单选题', '解答题', '解答题-证明题', '填空题'])
+        if (rand() < 0.15) f.sourcePaperId = 1 + Math.floor(rand() * 4)
+        if (rand() < 0.5) f.keyword = pick(['有理数', '方程', '<i>', 'oa．', '函数  F(x)', '&', '<b>', '第1', 'abc', '没有这个词'])
+        if (rand() < 0.15) f.ids = qids.filter(() => rand() < 0.5)
+        if (rand() < 0.35) f.chapterIds = sample([...chapters.map((c) => c.id), NO_CHAPTER], 3).concat(rand() < 0.3 ? [NO_CHAPTER] : [])
+        if (f.chapterIds && f.chapterIds.length === 0) delete f.chapterIds
+        if (rand() < 0.35) f.knowledgeIds = sample(kps.map((k) => k.id), 3)
+        if (rand() < 0.35) f.difficulties = sample(['easy', 'medium', 'hard'] as const, 2)
+        if (rand() < 0.35) f.tagIds = sample(tagIds, 3)
+        for (const key of ['knowledgeIds', 'difficulties', 'tagIds'] as const) if (f[key]?.length === 0) delete f[key]
+        return f
+      }
+
+      const sortById = <T extends { id: number }>(list: T[]): T[] => [...list].sort((a, b) => a.id - b.id)
+      let nonEmpty = 0
+      for (let round = 0; round < 300; round++) {
+        const f = randomFilter()
+        const expected = naiveIds(f)
+        if (expected.length > 0 && expected.length < rows.length) nonEmpty++
+        assert.deepEqual(listQuestionIds(rdb, f), expected, `ids ${JSON.stringify(f)}`)
+        const offset = Math.floor(rand() * 40)
+        const limit = 1 + Math.floor(rand() * 60)
+        const page = listQuestions(rdb, { ...f, offset, limit })
+        assert.equal(page.total, expected.length, `total ${JSON.stringify(f)}`)
+        assert.deepEqual(page.items.map((i) => i.id), expected.slice(offset, offset + limit), `page ${JSON.stringify(f)}`)
+
+        const facets = libraryFacets(rdb, f)
+        const typeCount = new Map<string, number>()
+        for (const id of naiveIds(f, 'type')) typeCount.set(rows.find((r) => r.id === id)!.type, (typeCount.get(rows.find((r) => r.id === id)!.type) ?? 0) + 1)
+        assert.deepEqual(
+          facets.types.map((t) => [t.type, t.count]).sort(),
+          [...typeCount.entries()].sort(),
+          `types ${JSON.stringify(f)}`
+        )
+
+        const chapterCount = new Map<number, number>()
+        for (const id of naiveIds(f, 'chapter')) {
+          const own = chapterOf.get(id) ?? []
+          if (own.length === 0) chapterCount.set(NO_CHAPTER, (chapterCount.get(NO_CHAPTER) ?? 0) + 1)
+          for (const c of own) {
+            chapterCount.set(c, (chapterCount.get(c) ?? 0) + 1)
+            const parent = parentOf.get(c)
+            if (parent != null) chapterCount.set(parent, (chapterCount.get(parent) ?? 0) + 1)
+          }
+        }
+        for (const c of f.chapterIds ?? []) if (!chapterCount.has(c)) chapterCount.set(c, 0)
+        assert.deepEqual(
+          sortById(facets.chapters),
+          sortById([...chapterCount.entries()].map(([id, count]) => ({ id, count }))),
+          `chapters ${JSON.stringify(f)}`
+        )
+
+        const knowledgeCount = new Map<number, number>()
+        for (const id of naiveIds(f, 'knowledge')) for (const k of knowledgeOf.get(id) ?? []) knowledgeCount.set(k, (knowledgeCount.get(k) ?? 0) + 1)
+        for (const k of f.knowledgeIds ?? []) if (!knowledgeCount.has(k)) knowledgeCount.set(k, 0)
+        const expectedKnowledge = [...knowledgeCount.entries()]
+          .map(([id, count]) => ({ id, name: kpName.get(id)!, count }))
+          .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh'))
+        assert.deepEqual(facets.knowledge.map((k) => ({ id: k.id, name: k.name, count: k.count })), expectedKnowledge, `knowledge ${JSON.stringify(f)}`)
+
+        const expectedDifficulties = DIFFICULTY_TIERS.map((t) => ({
+          key: t.key,
+          count: naiveIds(f, 'difficulty').filter((id) => difficultyTier(coefOf.get(id))?.key === t.key).length
+        })).filter((t) => t.count > 0 || f.difficulties?.includes(t.key))
+        assert.deepEqual(facets.difficulties, expectedDifficulties, `difficulties ${JSON.stringify(f)}`)
+
+        const tagCount = new Map<number, number>()
+        for (const id of naiveIds(f, 'tag')) for (const t of tagOf.get(id) ?? []) tagCount.set(t, (tagCount.get(t) ?? 0) + 1)
+        for (const t of f.tagIds ?? []) if (!tagCount.has(t)) tagCount.set(t, 0)
+        assert.deepEqual(sortById(facets.tags), sortById([...tagCount.entries()].map(([id, count]) => ({ id, count }))), `tags ${JSON.stringify(f)}`)
+      }
+      assert.ok(nonEmpty > 100, `随机条件要有足够多既非空也非全库的组合，实际 ${nonEmpty}`)
+    } finally {
+      rdb.close()
+      rmSync(dir2, { recursive: true, force: true })
+    }
+  })
+
   check('界面传来的筛选参数不可信：类型不对按没设，不抛原始错误', () => {
     const f = sanitizeFilter({ chapterIds: 'x', knowledgeIds: [1, '2', null, 1.5, 4740, 4740], difficulties: ['easy', 'evil', 3], tagIds: [], ids: {} })
     assert.equal(f.chapterIds, undefined)
@@ -384,13 +540,17 @@ try {
     const pid = createPaper(db, '第一单元测试')
     saveDraft(db, pid, { sections: [] })
     createVersion(db, pid, 'manual', '')
+    // 毫秒时钟在同一毫秒内分不出先后：把修改时间固定到很早，操作后任何写 updated_at 的实现都会让它变化
+    const FIXED = '2000-01-01T00:00:00.000Z'
+    db.prepare('UPDATE papers SET updated_at = ? WHERE id = ?').run(FIXED, pid)
     const before = getPaper(db, pid)
+    assert.equal(before.updatedAt, FIXED)
     assert.equal(before.draftDirty, false)
     const tag = createTag(db, 'paper', '7(3)班')
     setCategory(db, [pid], cat.id)
     changeTags(db, 'paper', [pid], { add: [tag.id] })
     const after = getPaper(db, pid)
-    assert.equal(after.updatedAt, before.updatedAt)
+    assert.equal(after.updatedAt, FIXED)
     assert.equal(after.draftDirty, false)
     const summary = listPapers(db).find((p) => p.id === pid)!
     assert.equal(summary.categoryId, cat.id)

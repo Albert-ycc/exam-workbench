@@ -32,6 +32,8 @@ interface RasterResult {
   height: number
 }
 
+const RASTER_TIMEOUT_MS = 120_000
+
 const MIME: Record<string, string> = { svg: 'image/svg+xml', webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp' }
 
 // 在隐藏窗口里执行：加载图片、读自然尺寸、画到 canvas 导出 PNG
@@ -39,11 +41,12 @@ const RASTER_SCRIPT = (jobs: RasterJob[]): string => `(async () => {
   const SCALE = ${SCALE}, MAX_SIDE = ${MAX_SIDE}, UPSCALE = ${UPSCALE}
   const out = []
   for (const job of ${JSON.stringify(jobs)}) {
+    try {
     const img = new Image()
     img.src = job.dataUrl
     await img.decode()
     const w = img.naturalWidth, h = img.naturalHeight
-    if (!w || !h) throw new Error('图片没有可识别的尺寸：' + job.src)
+    if (!w || !h) throw new Error('图片没有可识别的尺寸')
     const want = job.wantedWidth && job.wantedWidth > w ? job.wantedWidth / w : 1
     const factor = job.mode === 'upscale' ? UPSCALE : SCALE * want
     const scale = Math.min(factor, MAX_SIDE / Math.max(w, h))
@@ -69,6 +72,9 @@ const RASTER_SCRIPT = (jobs: RasterJob[]): string => `(async () => {
       g.putImageData(base, 0, 0)
     }
     out.push({ src: job.src, png: canvas.toDataURL('image/png').split(',')[1], width: w, height: h })
+    } catch (e) {
+      throw new Error('图片处理失败（' + String(job.src).slice(0, 80) + '）：' + (e && e.message ? e.message : e))
+    }
   }
   return out
 })()`
@@ -80,10 +86,18 @@ async function rasterize(jobs: RasterJob[]): Promise<RasterResult[]> {
     height: 360,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
   })
+  let timer: NodeJS.Timeout | undefined
   try {
-    await win.loadURL('about:blank')
-    return (await win.webContents.executeJavaScript(RASTER_SCRIPT(jobs))) as RasterResult[]
+    const work = (async (): Promise<RasterResult[]> => {
+      await win.loadURL('about:blank')
+      return (await win.webContents.executeJavaScript(RASTER_SCRIPT(jobs))) as RasterResult[]
+    })()
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('处理图片超时')), RASTER_TIMEOUT_MS)
+    })
+    return await Promise.race([work, timeout])
   } finally {
+    if (timer) clearTimeout(timer)
     win.destroy()
   }
 }

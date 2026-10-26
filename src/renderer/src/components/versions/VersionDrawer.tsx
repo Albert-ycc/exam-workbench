@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ExportRecord, VersionSummary } from '@shared/domain'
 import { IconDownload, IconFolder } from '../../icons'
-import { Button, Drawer, Tag, toast } from '../ui'
-import { baseName, errorMessage, formatTime } from '../editor/format'
+import { Button, Drawer, Tag, baseName, errorMessage, formatTime, toast } from '../ui'
 import { editionLabel, ORIGIN_LABEL, recordSummary, structureText } from './exportSummary'
 import './versions.css'
 

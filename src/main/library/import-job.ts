@@ -25,6 +25,7 @@ const POLL_MS = 700
 const NO_CONTENT_MS = 20_000 // 页面加载完成后仍没有题目
 const OPEN_TIMEOUT_MS = 30_000
 const WAIT_USER_MS = 10 * 60_000 // 等用户处理验证的最长时间
+const STALL_MS = 120_000 // 不在等用户的情况下，页面始终没出题目也没有稳定下来的最长时间
 const MAX_URLS = 50
 
 class CancelledError extends Error {}
@@ -187,6 +188,7 @@ export class ImportService {
       if (job.cancelled) throw new CancelledError()
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
+    if (job.cancelled) throw new CancelledError()
   }
 
   private setWaiting(job: Job, message: string | null): void {
@@ -242,8 +244,10 @@ export class ImportService {
     contents.on('did-navigate', onNavigate)
     contents.on('did-fail-load', onFail)
     try {
+      if (job.cancelled) throw new CancelledError()
       if (url) contents.loadURL(url).catch(() => undefined)
       const startedAt = Date.now()
+      let activeSince = startedAt // 最近一次不在等用户的时刻
       let settledAt: number | null = null
       let waitingSince: number | null = null
       for (;;) {
@@ -265,6 +269,7 @@ export class ImportService {
         }
         const waitUser = (message: string): void => {
           waitingSince ??= Date.now()
+          activeSince = Date.now()
           if (Date.now() - waitingSince > WAIT_USER_MS) throw new Error('等待超时，已放弃本条链接')
           this.setWaiting(job, message)
         }
@@ -281,7 +286,11 @@ export class ImportService {
         if (probe.kind !== 'none') {
           if (loading && Date.now() - startedAt < OPEN_TIMEOUT_MS) continue
           this.setWaiting(job, null)
-          return await this.runScript(contents, extractScript())
+          try {
+            return await this.runScript(contents, extractScript())
+          } catch {
+            continue // 探测之后页面恰好跳转，等下一轮
+          }
         }
         if (probe.verification) {
           waitUser('组卷网要求安全验证，请在内置浏览器里完成验证，完成后自动继续。')
@@ -289,6 +298,7 @@ export class ImportService {
         }
         waitingSince = null
         this.setWaiting(job, null)
+        if (Date.now() - activeSince > STALL_MS) throw new Error('页面长时间没有加载出题目')
         if (settledAt && Date.now() - settledAt > NO_CONTENT_MS) {
           throw new Error(nav.status >= 400 ? `页面里没有找到题目（HTTP ${nav.status}）` : '页面里没有找到题目，请确认链接是试卷页或试题页')
         }

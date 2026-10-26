@@ -1,8 +1,8 @@
 // 版本只读预览：整卷展示，可顺手恢复到这个版本
 import { useState } from 'react'
 import type { VersionDetail } from '@shared/domain'
-import { Button, Checkbox, Modal } from '../ui'
-import { formatTime } from '../editor/format'
+import { hasVisibleContent } from '@shared/numbering'
+import { Button, Checkbox, Modal, formatTime } from '../ui'
 import { ORIGIN_LABEL, structureText } from './exportSummary'
 import PaperSheet from './PaperSheet'
 import './versions.css'
@@ -15,7 +15,7 @@ interface Props {
 
 export default function VersionPreview({ version, onRestore, onClose }: Props) {
   const [showAnswers, setShowAnswers] = useState(false)
-  const hasAnswers = version.snapshot.sections.some((s) => s.items.some((i) => i.answerHtml != null))
+  const hasAnswers = version.snapshot.sections.some((s) => s.items.some((i) => hasVisibleContent(i.answerHtml)))
   return (
     <Modal
       title={`v${version.versionNo} 预览`}

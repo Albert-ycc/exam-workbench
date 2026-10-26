@@ -13,8 +13,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { TAG_NAME_MAX, classNameLength, cleanClassName, type Tag, type TagRenameResult } from '@shared/classify'
 import { IconEdit, IconTrash } from '../../icons'
-import { errorMessage } from '../library/format'
-import { Button, ConfirmDialog, EmptyState, Modal, TextInput, toast } from '../ui'
+import { Button, ConfirmDialog, EmptyState, Modal, TextInput, errorMessage, toast } from '../ui'
 import './classify.css'
 
 export interface TagManagerModalProps {

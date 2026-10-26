@@ -17,7 +17,7 @@ import type { ExportResult } from '../../src/shared/export.ts'
 
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-dialog-'))
 mkdirSync(evidence, { recursive: true })
-for (const f of readdirSync(evidence).filter((n) => n.endsWith('.png'))) rmSync(join(evidence, f))
+for (const f of readdirSync(evidence).filter((n) => /-\d+x\d+\.png$/.test(n))) rmSync(join(evidence, f))
 
 // ---------- 测试页：只含 DownloadDialog，样式与应用一致 ----------
 const harness = join(ROOT, 'node_modules/.cache/ewb-export-harness')
@@ -141,7 +141,6 @@ try {
   const group = (name: string) => dialog.getByRole('radiogroup', { name, exact: true })
   const radio = (name: string, label: string) => group(name).getByRole('radio', { name: label, exact: true })
   const optionLabels = (name: string) => group(name).getByRole('radio').evaluateAll((els) => els.map((e) => e.closest('label')!.innerText))
-  const names = () => dialog.locator('.dl-name-text').allInnerTexts()
   const pathText = () => dialog.locator('.dl-path-text').innerText()
   const primary = () => dialog.getByRole('button', { name: /^(下载|重新生成|正在生成…)/ }).last()
   const settle = () => window.waitForTimeout(200)

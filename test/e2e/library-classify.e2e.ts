@@ -20,7 +20,7 @@ mkdirSync(evidence, { recursive: true })
 
 // ---------- 数据：样例 6 题 + 40 道第一单元题 ----------
 const dataDir = mkdtempSync(join(tmpdir(), 'ewb-lib-classify-data-'))
-const seed = seedDataDir(dataDir)
+seedDataDir(dataDir)
 const UNIT_TITLE = '样例中学2026-2027学年七年级上学期第一单元测试数学试题'
 const FILLER = 40
 const k = (id: number, name: string) => ({ id, name, subject: 'czsx' })
@@ -99,10 +99,8 @@ async function shots(name: string): Promise<void> {
 
 const rail = window.locator('.lb-filter')
 const cards = window.getByTestId('question-card')
-const total = window.getByTestId('library-total')
 const toast = (text: string): Locator => window.getByTestId('toast').filter({ hasText: text })
 const lib = <T,>(fn: (library: Window['workbench']['library']) => Promise<T>): Promise<T> => window.evaluate(`(${fn.toString()})(window.workbench.library)`) as Promise<T>
-const totalText = async (): Promise<string> => (await total.innerText()).replace(/\s+/g, '')
 const chips = async (): Promise<string[]> => (await window.locator('.lb-chip-label').allInnerTexts()).map((t) => t.trim())
 const block = (title: string): Locator => rail.locator('section.cf-block').filter({ has: window.locator('.cf-title', { hasText: new RegExp(`^${title}$`) }) })
 const bar = window.getByRole('toolbar', { name: '批量操作' })

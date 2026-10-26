@@ -12,7 +12,7 @@ import {
   type DragMoveEvent,
   type DragStartEvent
 } from '@dnd-kit/core'
-import type { ExportKind, LibraryQuestion, PaperDetail, VersionDetail, VersionSummary } from '@shared/domain'
+import type { ExportKind, LibraryQuestion, PaperDetail, PaperDraft, VersionDetail, VersionSummary } from '@shared/domain'
 import { numberItems, numberLabel, sectionHeading, structureOf } from '@shared/numbering'
 import type { PaperSaveResult } from '@shared/papers'
 import DownloadDialog from '../components/DownloadDialog'
@@ -36,20 +36,20 @@ import {
   updateItem,
   type DropMark
 } from '../components/editor/draftOps'
-import { errorMessage, formatClock } from '../components/editor/format'
 import { isBlankHtml, plainText } from '../components/editor/html'
 import { IconRedo, IconUndo } from '../components/editor/icons'
 import type { ItemOps } from '../components/editor/ItemCard'
 import LibraryPane from '../components/editor/LibraryPane'
 import PaperPane, { type SectionOps } from '../components/editor/PaperPane'
 import { SectionTargets } from '../components/editor/sectionsContext'
-import StructureBar from '../components/editor/StructureBar'
+import StructureBar, { totalText } from '../components/editor/StructureBar'
 import StructurePanel, { type StructureActions } from '../components/editor/StructurePanel'
 import { useAutosave } from '../components/editor/useAutosave'
 import { useEditorDraft } from '../components/editor/useEditorDraft'
 import { useElementWidth } from '../components/editor/useOverflow'
 import { IconBack, IconCheck, IconDownload, IconHistory, IconMore, IconSave, IconScissors } from '../icons'
-import { Button, CircledNote, ConfirmDialog, IconButton, Menu, Modal, Tag, TextInput, toast, usePersistentState } from '../components/ui'
+import { Button, CircledNote, ConfirmDialog, IconButton, Menu, Modal, Tag, TextInput, errorMessage, formatClock, toast, usePersistentState } from '../components/ui'
+import { TITLE_MAX, withSuffix } from '../components/papers/titleMax'
 import { navigateTo } from '../navigation'
 import VersionDrawer from '../components/versions/VersionDrawer'
 import VersionPreview from '../components/versions/VersionPreview'
@@ -66,7 +66,6 @@ type ActiveDrag = { kind: 'lib'; question: LibraryQuestion } | { kind: 'item'; i
 // 窗口（卷面区加结构栏）够宽时才常驻右侧结构栏，否则收成卷面顶部的结构条
 const WIDE_MIN = 1360
 const DRAWER_COLLAPSE_LIB = 1100 // 版本历史打开后卷面区不足这个宽度，就先把题库栏收起来，让卷面保持完整版面
-const TITLE_MAX = 100 // 与保存、导出文件名的上限一致，界面上不能多写出存不下的字
 const XL_MIN = 1400 // 再宽一点，题库栏与结构栏各让出几十像素给卷面
 // 拖到卷面上下边缘自动滚动：触发区 80px，最快每秒 360px（dnd-kit 自带的最快每秒近 2000px，落点根本没法控制）
 const SCROLL_ZONE = 80
@@ -127,7 +126,8 @@ export default function EditorPage({ paperId, onBack }: Props) {
   const [title, setTitle] = useState('')
   const titleRef = useRef('') // 最近一次有效（非空）的标题
   const [meta, setMeta] = useState<{ latestVersionNo: number | null; draftDirty: boolean }>({ latestVersionNo: null, draftDirty: true })
-  const [restoredFrom, setRestoredFrom] = useState<number | null>(null) // 刚从哪个版本恢复，内容与它相同时不报「有未存改动」
+  // 刚从哪个版本恢复，连同当时的 sections 引用：之后内容一变引用就不同，不再报「内容同 vN」
+  const [restoredFrom, setRestoredFrom] = useState<{ versionNo: number; sections: PaperDraft['sections'] } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingRef = useRef<string | null>(null)
   const editSession = useRef(0)
@@ -192,11 +192,11 @@ export default function EditorPage({ paperId, onBack }: Props) {
   const autoCollapseLib = drawerOpen && mainWidth > 0 && mainWidth < DRAWER_COLLAPSE_LIB
   const libHidden = libOverride ?? (libCollapsed || autoCollapseLib)
   useEffect(() => setLibOverride(null), [drawerOpen])
-  const toggleLib = (): void => {
+  const toggleLib = useCallback((): void => {
     const next = !libHidden
     if (autoCollapseLib) setLibOverride(next)
     else setLibCollapsed(next)
-  }
+  }, [libHidden, autoCollapseLib, setLibCollapsed])
 
   // ---------- 载入 ----------
   const applyDetail = useCallback(
@@ -268,13 +268,24 @@ export default function EditorPage({ paperId, onBack }: Props) {
   const numbered = useMemo(() => new Map(numberedList.map((n) => [n.item.id, n])), [numberedList])
   const numberedRef = useRef(numbered)
   numberedRef.current = numbered
+  // 题库栏的行靠 addedAt 里每道题的题号数组判断要不要重绘：内容没变就沿用上一份的数组，全都没变就沿用整个 Map
+  const prevAddedAt = useRef<ReadonlyMap<number, number[]>>(new Map())
   const addedAt = useMemo(() => {
     const map = new Map<number, number[]>()
     for (const n of numberedList) {
       const origin = n.item.originQuestionId
       if (origin != null) map.set(origin, [...(map.get(origin) ?? []), n.firstNo])
     }
-    return map
+    const prev = prevAddedAt.current
+    let same = prev.size === map.size
+    for (const [origin, nos] of map) {
+      const old = prev.get(origin)
+      if (old && old.length === nos.length && old.every((no, i) => no === nos[i])) map.set(origin, old)
+      else same = false
+    }
+    const result: ReadonlyMap<number, number[]> = same ? prev : map
+    prevAddedAt.current = result
+    return result
   }, [numberedList])
   const addedAtRef = useRef(addedAt)
   addedAtRef.current = addedAt
@@ -713,7 +724,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
     const n = numberItems(simulated.sections).find((x) => x.item.id === (dragging.kind === 'lib' ? probeId : dragging.itemId))
     if (!n) return null
     const section = simulated.sections[n.sectionIndex]
-    return { label: numberLabel(n), heading: sectionHeading(n.sectionIndex, section.title || '未命名'), newSection: mark.sectionId === null }
+    return { label: numberLabel(n), title: section.title || '未命名', heading: sectionHeading(n.sectionIndex, section.title || '未命名'), newSection: mark.sectionId === null }
   }, [dragging, mark, draft])
 
   // ---------- 版本 ----------
@@ -773,7 +784,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
       editingRef.current = null
       setEditingId(null)
       setMeta({ latestVersionNo: detail.latestVersionNo, draftDirty: detail.draftDirty })
-      setRestoredFrom(target.versionNo)
+      setRestoredFrom({ versionNo: target.versionNo, sections: detail.draft.sections })
       reset(detail.updatedAt)
       setVersionsKey((k) => k + 1)
       setRestoreTarget(null)
@@ -837,7 +848,8 @@ export default function EditorPage({ paperId, onBack }: Props) {
 
   const { state: saveState, savedAt, error: saveError } = autosave.status
   const pendingSave = saveState === 'pending' || saveState === 'saving'
-  const dirty = (meta.draftDirty && restoredFrom == null) || pendingSave
+  const restoredNo = restoredFrom && restoredFrom.sections === draft.sections ? restoredFrom.versionNo : null
+  const dirty = (meta.draftDirty && restoredNo == null) || pendingSave
   const blankDraft = empty && meta.latestVersionNo == null && !pendingSave // 新建的空白试卷，没有什么可存的
   const emptyReason = '试卷里还没有题目，先从左边的试题库加入题目'
   const draggingItemId = dragging?.kind === 'item' ? dragging.itemId : null
@@ -859,7 +871,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
 
   const dragStripTarget = dropInfo
     ? dropInfo.newSection
-      ? `松开新建大题「${dropInfo.heading.replace(/^.、/, '')}」，成为第 ${dropInfo.label} 题`
+      ? `松开新建大题「${dropInfo.title}」，成为第 ${dropInfo.label} 题`
       : `松开放进「${dropInfo.heading}」，成为第 ${dropInfo.label} 题`
     : null
   const draggedItem = dragging?.kind === 'item' ? draft.sections.flatMap((s) => s.items).find((i) => i.id === dragging.itemId) : undefined
@@ -907,7 +919,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
           ) : (
             !dirty && (
               <span className="ed-clean" data-testid="clean-tag">
-                {restoredFrom != null ? `内容同 v${restoredFrom}` : `与 v${meta.latestVersionNo} 一致`}
+                {restoredNo != null ? `内容同 v${restoredNo}` : `与 v${meta.latestVersionNo} 一致`}
               </span>
             )
           )}
@@ -935,7 +947,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
             align="end"
             label="更多操作"
             trigger={<IconButton label="更多操作" icon={<IconMore size={16} />} variant="default" data-testid="bar-more" />}
-            items={[{ label: '另存为新试卷…', disabled: empty, onSelect: () => setDupDialog({ title: `${titleRef.current}（副本）` }) }]}
+            items={[{ label: '另存为新试卷…', disabled: empty, onSelect: () => setDupDialog({ title: withSuffix(titleRef.current, '（副本）') }) }]}
           />
         </div>
       </header>
@@ -987,7 +999,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
               reloadKey={versionsKey}
               onView={(v) => void viewVersion(v)}
               onRestore={setRestoreTarget}
-              onDuplicate={(v) => setDupDialog({ versionId: v.id, title: `${titleRef.current}（v${v.versionNo} 副本）` })}
+              onDuplicate={(v) => setDupDialog({ versionId: v.id, title: withSuffix(titleRef.current, `（v${v.versionNo} 副本）`) })}
               onClose={() => setDrawerOpen(false)}
               onVersionsChanged={() => void refreshMeta().catch(() => undefined)}
             />
@@ -1048,7 +1060,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
           />
         </label>
         <p className="ed-field-hint">
-          当前 {structure.questionCount} 题{structure.totalScore != null ? `，${structure.allScored ? '满分' : '已设分'} ${structure.totalScore} 分` : ''}。
+          当前{totalText(structure)}。
           {!dirty && meta.latestVersionNo != null ? `与 v${meta.latestVersionNo} 内容相同，仍会生成新的版本。` : ''}
         </p>
       </Modal>
@@ -1107,7 +1119,7 @@ export default function EditorPage({ paperId, onBack }: Props) {
             data-autofocus=""
             aria-label="新试卷标题"
             value={dupDialog?.title ?? ''}
-            maxLength={100}
+            maxLength={TITLE_MAX}
             onChange={(v) => setDupDialog((d) => (d ? { ...d, title: v } : d))}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.nativeEvent.isComposing && !duplicating && dupDialog?.title.trim()) void duplicate()

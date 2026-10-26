@@ -29,6 +29,8 @@ const OUT_TAGS = new Set(['p', 'br', 'span', 'b', 'strong', 'i', 'em', 'u', 'sub
 // 输出时不带 data-ewb-qno：真正的占位元素在这之前已被 fillQuestionNumbers 换成了题号，剩下的都是普通 span
 const OUT_ATTRS = new Set(['src', 'width', 'height', 'alt', 'colspan', 'rowspan', 'data-role'])
 const VOID_TAGS = new Set(['br', 'img', 'hr', 'input', 'meta', 'link', 'col', 'wbr'])
+// 嵌套超过这个深度的元素不再入栈（内容并入当前层），避免后面递归遍历时栈溢出
+const MAX_DEPTH = 200
 const DROP_CONTENT_TAGS = new Set(['script', 'style', 'noscript', 'template'])
 // 块级标签：出现在行内内容中间时会截断段落
 export const BLOCK_TAGS = new Set(['p', 'div', 'table', 'thead', 'tbody', 'tr', 'ol', 'ul', 'li'])
@@ -97,6 +99,8 @@ export function parseHtml(rawHtml: string): HNode[] {
   }
 
   let i = 0
+  // 下一个 '>' 的位置（-1 表示后面再没有）：「有 < 无 >」的文本不必每个 < 都扫到结尾去试匹配
+  let nextGt = html.indexOf('>')
   while (i < html.length) {
     const lt = html.indexOf('<', i)
     if (lt === -1) {
@@ -109,8 +113,9 @@ export function parseHtml(rawHtml: string): HNode[] {
       i = end === -1 ? html.length : end + 3
       continue
     }
+    if (nextGt !== -1 && nextGt < lt) nextGt = html.indexOf('>', lt)
     TAG_RE.lastIndex = lt
-    const m = TAG_RE.exec(html)
+    const m = nextGt === -1 ? null : TAG_RE.exec(html)
     if (!m) {
       pushText('<')
       i = lt + 1
@@ -138,7 +143,7 @@ export function parseHtml(rawHtml: string): HNode[] {
     if (closes) while (stack.length > 1 && closes.includes(top().tag)) stack.pop()
     const node = el(tag, parseAttrs(m[3]))
     top().children.push(node)
-    if (!VOID_TAGS.has(tag) && !/\/\s*$/.test(m[3])) stack.push(node)
+    if (!VOID_TAGS.has(tag) && !/\/\s*$/.test(m[3]) && stack.length <= MAX_DEPTH) stack.push(node)
   }
   return root.children
 }
@@ -197,8 +202,9 @@ export function textContent(nodes: HNode[]): string {
   return out
 }
 
-// 有可见内容：非空白文字、图片或表格。nbsp 与全角空格不算可见（它们常被用来撑空段落）
-export function hasVisibleContent(nodes: HNode[]): boolean {
+// 排版上有东西要输出：非空白文字、图片、表格或带下划线的空格（填空横线）。nbsp 与全角空格不算（它们常被用来撑空段落）。
+// 这是「这段要不要排出来」的判断；「题目有没有答案」走 shared/numbering.ts 的 hasVisibleContent，与自检同一口径
+export function hasRenderableContent(nodes: HNode[]): boolean {
   for (const node of nodes) {
     if (node.type === 'text') {
       if (node.text.replace(/[\s 　]/g, '') !== '') return true
@@ -206,7 +212,7 @@ export function hasVisibleContent(nodes: HNode[]): boolean {
       return true
     } else if (node.tag === 'u' && textContent(node.children) !== '') {
       return true // 带下划线的空格是填空横线
-    } else if (hasVisibleContent(node.children)) {
+    } else if (hasRenderableContent(node.children)) {
       return true
     }
   }
@@ -218,7 +224,7 @@ export function blockify(nodes: HNode[]): HNode[] {
   const out: HNode[] = []
   let run: HNode[] = []
   const flush = (): void => {
-    if (hasVisibleContent(run)) out.push(el('p', {}, run))
+    if (hasRenderableContent(run)) out.push(el('p', {}, run))
     run = []
   }
   for (const node of nodes) {

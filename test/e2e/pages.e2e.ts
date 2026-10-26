@@ -15,12 +15,12 @@ import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
 import { compareTypeNames, primaryQuestionType } from '../../src/shared/library.ts'
 import { numberItems, numberLabel } from '../../src/shared/numbering.ts'
-import { buildTo, ROOT } from '../../scripts/e2e/app.ts'
-import { ENGLISH_URL, installIntercept, launchOffline, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
+import { buildTo, launchApp, ROOT } from '../../scripts/e2e/app.ts'
+import { ENGLISH_URL, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
 const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-pages-'))
 mkdirSync(evidence, { recursive: true })
-// 各套端到端各用自己的构建目录；本套用 out-pages5，不与试题库线的 library.e2e.ts（out-pages4）互相覆盖
+// 各套端到端各用自己的构建目录；本套用 out-pages5，与其余各套的构建目录互不重叠
 const OUT = 'out-pages5'
 process.env.EWB_IMPORT_GAP_MS = '300' // 入库的页间间隔缩短，测试不必干等
 buildTo(OUT)
@@ -64,7 +64,7 @@ const totalText = async (window: Page): Promise<string> => (await window.getByTe
 // ======================================================================
 const TOTAL = 43 // 数学卷 23 题 + 英语卷 20 题
 const COMPOSITE = '七年级数学英语综合测试'
-const real = await launchOffline({ outDir: OUT })
+const real = await launchApp({ outDir: OUT })
 const { app, window } = real
 
 interface Q {
@@ -619,7 +619,7 @@ try {
 // ======================================================================
 // 第二部分：空库与入库（本地样本页代替组卷网）
 // ======================================================================
-const flow = await launchOffline({ outDir: OUT })
+const flow = await launchApp({ outDir: OUT })
 try {
   const { app, window } = flow
   await installIntercept(app)
