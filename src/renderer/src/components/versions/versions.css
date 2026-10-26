@@ -1,0 +1,139 @@
+/* 版本历史抽屉与只读预览（方向 C）。卷面部分复用 editor-c.css 的 ed-sheet / ed-sec / ed-item */
+.ed-versions .ui-drawer-body {
+  padding-top: 0;
+}
+.ed-ver-msg {
+  margin: 8px 0 0;
+  padding: 7px 10px;
+  border-left: 3px solid var(--ok);
+  background: var(--ok-bg);
+  font-size: 13px;
+  color: var(--ok);
+  overflow-wrap: anywhere;
+}
+.ed-ver-msg.is-error {
+  border-left-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red-2);
+}
+.ed-ver-empty {
+  margin: 28px 8px;
+  text-align: center;
+  line-height: 1.7;
+  color: var(--mute);
+}
+.ed-ver-empty.is-error {
+  color: var(--red);
+}
+.ed-ver {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.ed-ver-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ed-ver-no {
+  font: 700 17px 'Times New Roman', var(--song);
+}
+.ed-ver-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.ed-ver-struct {
+  margin: 6px 0 0;
+  font: 13.5px var(--song);
+  color: var(--ink);
+}
+.ed-ver-note {
+  margin: 2px 0 8px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.ed-ver-note.is-none {
+  color: var(--mute);
+}
+.ed-ver-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ed-ver-exports {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ed-ver-exports li {
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  background: var(--tint);
+}
+.ed-exp-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ed-exp-name {
+  flex: 1 1 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ed-exp-opts {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  color: var(--mute);
+}
+.ed-exp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ed-preview-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--mute);
+}
+.ed-preview-note {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.ed-preview-check {
+  margin-left: auto;
+  color: var(--ink);
+}
+.ed-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  background: var(--desk);
+}
+.ed-foot-note {
+  color: var(--mute);
+  font-size: 12px;
+}
+.ed-sec-heading {
+  white-space: nowrap;
+}
+.ed-sheet.is-readonly .ed-sec-head {
+  padding-right: 24px;
+}
+.ed-score-text {
+  font-size: 12px;
+  color: var(--ink-2);
+}

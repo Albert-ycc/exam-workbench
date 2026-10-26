@@ -1,0 +1,94 @@
+{
+  "name": "exam-workbench",
+  "productName": "组卷工作台",
+  "version": "0.3.0",
+  "description": "组卷工作台：从组卷网入库试题、拖拽组卷、按配置导出 PDF / Word",
+  "author": "Albert",
+  "private": true,
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist:win": "npm run build && electron-builder --win nsis --x64",
+    "dist:mac": "npm run build && electron-builder --mac dir",
+    "test:db": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-db.ts",
+    "test:papers": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-papers.ts",
+    "test": "npm run test:db && npm run test:structure && npm run test:papers && npm run test:export && npm run test:import",
+    "e2e:smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/smoke.e2e.ts",
+    "seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/seed-dev.ts",
+    "test:export": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-export.ts",
+    "e2e:export": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/export.e2e.ts",
+    "e2e:export-dialog": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/export-dialog.e2e.ts",
+    "e2e:editor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/editor.e2e.ts",
+    "test:import": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-import.ts",
+    "e2e:library": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/library.e2e.ts",
+    "e2e:editor-touch": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/editor-touch.e2e.ts",
+    "test:structure": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning scripts/test-structure.ts"
+  },
+  "devDependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "docx": "~9.14.0",
+    "dompurify": "^3.4.17",
+    "electron": "^44.9.3",
+    "electron-builder": "^26.17.0",
+    "electron-vite": "^5.0.0",
+    "playwright": "^1.63.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7"
+  },
+  "build": {
+    "appId": "local.examworkbench.app",
+    "productName": "组卷工作台",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "组卷工作台-${version}-安装程序.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "组卷工作台",
+      "language": "2052"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir"
+        }
+      ],
+      "identity": null
+    },
+    "toolsets": {
+      "nsis": "1.2.1",
+      "winCodeSign": "1.1.0"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+.ui-mark {
+  flex: 0 0 auto;
+  color: var(--red);
+}
+.ui-redpen {
+  color: var(--red);
+  font-family: var(--kai);
+  font-size: max(15px, 1em);
+  white-space: nowrap;
+}
+.ui-circled {
+  position: relative;
+  display: inline-block;
+  padding: 3px 14px;
+  color: var(--red);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ui-circled > svg {
+  position: absolute;
+  left: -2px;
+  top: -5px;
+  width: calc(100% + 4px);
+  height: calc(100% + 10px);
+  overflow: visible;
+  pointer-events: none;
+}

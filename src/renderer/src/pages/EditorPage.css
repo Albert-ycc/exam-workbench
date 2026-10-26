@@ -1,0 +1,148 @@
+/* 组卷编辑器页面：顶栏 + 三栏主体 */
+.ed {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--desk);
+}
+.ed-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--mute);
+}
+.ed-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+/* ---------- 顶栏 ---------- */
+.ed-bar {
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 56px;
+  padding: 0 22px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  container-type: inline-size;
+  container-name: edbar;
+}
+.ed-bar .bar-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 4px 0 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.ed-bar .bar-back:hover:not(:disabled) {
+  background: transparent;
+  color: var(--bb);
+}
+.ed-slash {
+  color: var(--rule-2);
+}
+.ed-title {
+  flex: 0 1 330px;
+  min-width: 120px;
+  height: 34px;
+  align-items: center;
+  font: 700 18px var(--song);
+  color: var(--ink);
+}
+.ed-title input {
+  height: 100%;
+}
+.ed-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.ed-status > .ed-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ed-status button.ed-saved {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--red);
+  text-decoration: underline;
+}
+.ed-status .ed-saved svg {
+  color: var(--ink-2);
+}
+.ed-status .is-error svg {
+  color: var(--red);
+}
+.ed-status .ed-clean {
+  color: var(--mute);
+}
+.ed-hint {
+  font-size: 12px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.ed-grow {
+  flex: 1;
+  min-width: 0;
+}
+.ed-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+@container edbar (max-width: 1190px) {
+  .ed-hint,
+  .ed-saved-time {
+    display: none;
+  }
+}
+@container edbar (max-width: 1130px) {
+  .ed-tool-history .ui-btn-label,
+  .ed-tool-history .ui-btn svg + .ui-btn-label {
+    display: none;
+  }
+  .ed-tool-history {
+    padding: 0 9px;
+  }
+  .ed-undo-redo {
+    display: none !important;
+  }
+}
+@container edbar (max-width: 1060px) {
+  .ed-title {
+    flex-basis: 200px;
+    min-width: 90px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .ed-bar {
+    padding: 0 14px;
+    gap: 8px;
+  }
+  .ed-sbar {
+    padding: 6px 12px;
+  }
+}

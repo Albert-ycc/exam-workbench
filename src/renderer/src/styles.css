@@ -1,0 +1,331 @@
+/* 方向 C · 红笔校样 —— 设计变量、基础样式与应用外壳
+   来源：本地的单元测试卷与答题卡（宋体 + Times New Roman、黑框、题号格）。
+   蓝黑墨水 = 界面操作与选中；红笔 = 只标「改动」（已加入的勾、插入位置、未存为版本的圈注、删除确认）；
+   其余一律黑白灰，线条用发丝线，圆角不超过 3px。 */
+
+:root {
+  /* ---- 色板 ---- */
+  --desk: #ecedea; /* 校样台：试卷背后的灰 */
+  --paper: #ffffff;
+  --ink: #1a1a1a; /* 印刷黑 */
+  --ink-2: #4a4d48;
+  --mute: #6b6e68; /* 白底上对比 5.3:1 */
+  --rule: #dadbd6; /* 发丝线：分隔、面板边 */
+  --rule-2: #8b8e88; /* 输入框线、虚线框 */
+  --tint: #f6f6f3; /* 表头、悬停行底 */
+  --hover: #f4f4f1; /* 按钮悬停底 */
+  --bb: #1f3a68; /* 蓝黑墨水：主操作、选中、链接 */
+  --bb-2: #162c52; /* 蓝黑悬停 */
+  --bb-bg: #ebf0f7; /* 选中底 */
+  --red: #c3322b; /* 红笔 */
+  --red-2: #a32a24; /* 红悬停 */
+  --red-bg: #fcefec;
+  --ok: #2e6b45;
+  --ok-bg: #eaf3ec;
+  --warn: #8a5a00;
+  --warn-bg: #fbf1db;
+
+  /* ---- 字体 ---- */
+  /* 界面：等线（Win10 起自带），退回微软雅黑 */
+  --ui: 'DengXian', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  /* 卷面、标题、数字：宋体 + Times New Roman（西文与数字走 Times） */
+  --song: 'Times New Roman', 'SimSun', 'Songti SC', 'Noto Serif SC', serif;
+  /* 红笔批注：楷体，只用于 15px 以上（再小笔画糊） */
+  --kai: 'KaiTi', 'STKaiti', 'Kaiti SC', serif;
+
+  /* ---- 形态 ---- */
+  --radius: 2px;
+  --radius-lg: 3px;
+  --shadow-paper: 0 1px 3px rgba(0, 0, 0, 0.1); /* 试卷纸 */
+  --shadow-strip: 0 10px 24px rgba(0, 0, 0, 0.2); /* 拖动中的题条 */
+  --shadow-float: 0 8px 28px rgba(0, 0, 0, 0.18); /* 弹窗、菜单 */
+  --focus: 2px solid var(--bb);
+  --nav-h: 50px;
+  --nav-line: 5px;
+
+  /* ---- 层级 ---- */
+  --z-drawer: 40;
+  --z-modal: 1000;
+  --z-popover: 1100;
+  --z-toast: 1200;
+
+  /* ---- 旧变量名：映射到新变量，各页面改造前不会坏 ---- */
+  --bg: var(--desk);
+  --panel: var(--paper);
+  --sidebar: #f1f1ee;
+  --border: var(--rule);
+  --text: var(--ink);
+  --muted: var(--mute);
+  --accent: var(--bb);
+  --accent-bg: var(--bb-bg);
+  --danger: var(--red);
+  --danger-bg: var(--red-bg);
+
+  font-family: var(--ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--desk);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+::selection {
+  background: #cfdcf0;
+}
+
+/* ---- 滚动条：发丝细、方头 ---- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c4c5c0;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rule-2);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---- 基础控件：零权重（:where），任何类选择器都能覆盖 ---- */
+:where(:focus-visible) {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+:where(button) {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: 5px 14px;
+}
+
+:where(button:hover:not(:disabled)) {
+  background: var(--hover);
+}
+
+:where(button:disabled) {
+  cursor: default;
+  opacity: 0.4;
+}
+
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']), select, textarea) {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  min-width: 0;
+  outline: none;
+}
+
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='hidden']):focus, select:focus, textarea:focus) {
+  border-color: var(--bb);
+  box-shadow: 0 0 0 1px var(--bb);
+}
+
+:where(input::placeholder, textarea::placeholder) {
+  color: var(--mute);
+}
+
+:where(input:disabled, select:disabled, textarea:disabled) {
+  background: var(--tint);
+  color: var(--mute);
+}
+
+:where(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--bb);
+}
+
+/* ---- 应用外壳：顶部导航 + 内容区 ---- */
+.shell {
+  display: grid;
+  grid-template-rows: var(--nav-h) minmax(0, 1fr);
+  height: 100%;
+  background: var(--desk);
+}
+
+/* 文武线（粗线 + 细线）收边 */
+.app-nav {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 30px;
+  padding: 0 22px;
+  background: var(--paper);
+}
+
+.app-nav::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--nav-line);
+  border-top: 2.5px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  pointer-events: none;
+}
+
+.app-brand {
+  align-self: center;
+  margin-right: 18px;
+  padding-bottom: 4px;
+  font: 700 19px var(--song);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 2px 6px;
+  font-size: 15px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.nav-item:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+
+.nav-item svg {
+  color: var(--mute);
+}
+
+.nav-item.on {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.nav-item.on svg {
+  color: var(--ink);
+}
+
+/* 选中标记：压在文武线上的一条黑块 */
+.nav-item.on::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: calc(var(--nav-line) - 1px);
+  height: 4px;
+  background: var(--ink);
+}
+
+.nav-item:focus-visible {
+  outline-offset: -2px;
+}
+
+/* S16：窗口窄（< 1200px）时导航收成紧凑样式，把纵向与横向空间让给编辑器 */
+@media (max-width: 1199px) {
+  :root {
+    --nav-h: 42px;
+    --nav-line: 4px;
+  }
+  .app-nav {
+    gap: 18px;
+    padding: 0 14px;
+  }
+  .app-nav::after {
+    border-top-width: 2px;
+  }
+  .app-brand {
+    margin-right: 6px;
+    font-size: 17px;
+    letter-spacing: 1px;
+  }
+  .nav-item {
+    font-size: 14px;
+    padding-bottom: 5px;
+  }
+  .nav-item svg {
+    display: none;
+  }
+  .nav-item.on::after {
+    height: 3px;
+  }
+}
+
+.content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 页面共用的全局类 ---- */
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.notice {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--rule);
+}
+
+.notice.error {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.browser-host {
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.page {
+  padding: 28px 32px;
+  overflow: auto;
+}
+
+.page h1 {
+  font: 700 20px var(--song);
+  letter-spacing: 1px;
+  margin: 0 0 20px;
+}
+
+/* ---- 旧版主按钮 / 危险按钮的悬停色：编辑器样式里写死了亮蓝与亮红，这里收回到蓝黑与红笔 ---- */
+button.primary:hover:not(:disabled) {
+  background: var(--bb-2);
+  border-color: var(--bb-2);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--red-2);
+  border-color: var(--red-2);
+}

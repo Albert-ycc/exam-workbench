@@ -1,0 +1,424 @@
+/* 试题库的题目行、加入试卷选择框，以及采集页的入库面板（方向 C） */
+
+/* ---------- 题目行 ---------- */
+.lb-row {
+  --row-bg: var(--paper);
+  position: relative;
+  align-items: start;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--row-bg);
+}
+
+.lb-row:hover:not(.is-confirming) {
+  --row-bg: var(--tint);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+
+.lb-row.is-confirming {
+  --row-bg: var(--red-bg);
+}
+
+.lb-idx {
+  padding-top: 3px;
+  color: var(--mute);
+  font: 15px var(--song);
+}
+
+.lb-main {
+  min-width: 0;
+}
+
+.lb-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 4px;
+}
+
+.lb-stem {
+  position: relative;
+}
+
+.lb-stem .question-html {
+  color: #111;
+  font: 15px/1.85 var(--song);
+}
+
+.lb-stem.is-clamped {
+  max-height: 150px;
+  overflow: hidden;
+}
+
+.lb-stem.is-clamped::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 28px;
+  background: linear-gradient(rgba(255, 255, 255, 0), var(--row-bg));
+}
+
+/* 搜索命中词：荧光笔 */
+.lb-stem mark {
+  padding: 0;
+  background: rgba(240, 200, 80, 0.5);
+  color: inherit;
+}
+
+.lb-links {
+  display: flex;
+  gap: 16px;
+  margin-top: 2px;
+}
+
+.lb-links .ui-btn {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.lb-answer {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--rule-2);
+  background: var(--paper);
+}
+
+.lb-answer .question-html {
+  font: 14.5px/1.8 var(--song);
+}
+
+.lb-src {
+  min-width: 0;
+  padding-top: 3px;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lb-src-paper {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--mute);
+  font-size: 13px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.lb-ops {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.lb-ops .lb-del {
+  border-color: var(--rule-2);
+}
+
+.lb-usage {
+  color: var(--mute);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.lb-confirm-text {
+  margin: 0;
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+/* ---------- 选择试卷 ---------- */
+.picker-list {
+  max-height: 340px;
+  margin: 10px 0 0;
+  padding: 0;
+  overflow: auto;
+  border-top: 1px solid var(--ink);
+  list-style: none;
+}
+
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--paper);
+  text-align: left;
+}
+
+.picker-item:hover:not(:disabled) {
+  background: var(--tint);
+  box-shadow: inset 3px 0 0 var(--bb);
+}
+
+.picker-title {
+  overflow: hidden;
+  font: 15px var(--song);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-meta {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.picker-none {
+  margin: 14px 0 0;
+  color: var(--mute);
+}
+
+/* ---------- 入库面板：挤压内置浏览器的侧栏（原生视图会盖住弹窗，所以不做成弹窗） ---------- */
+.import-panel {
+  display: flex;
+  flex: 0 0 400px;
+  flex-direction: column;
+  width: 400px;
+  min-height: 0;
+  border-left: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.import-panel > header,
+.import-panel > footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.import-panel > header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.import-panel > footer {
+  border-top: 1px solid var(--rule);
+}
+
+.import-panel h2 {
+  margin: 0;
+  font: 700 16px var(--song);
+  letter-spacing: 1px;
+}
+
+.import-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.import-textarea {
+  width: 100%;
+  height: 220px;
+  padding: 8px 10px;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.import-hint {
+  margin: 8px 0 0;
+  color: var(--mute);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.import-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.import-warn {
+  color: var(--warn);
+}
+
+.import-count {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.import-progress {
+  height: 6px;
+  background: var(--tint);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+
+.import-progress > div {
+  height: 100%;
+  background: var(--bb);
+  transition: width 0.3s;
+}
+
+.import-current {
+  margin: 10px 0 0;
+  color: var(--mute);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.import-callout {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #e3cf9c;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-callout.is-blocking {
+  border-color: var(--rule-2);
+  background: var(--tint);
+  color: var(--ink-2);
+}
+
+.import-list,
+.import-questions {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-item {
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.import-item-title,
+.import-page-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-item-meta {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.import-summary {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.import-page {
+  margin-bottom: 10px;
+  border: 1px solid var(--rule-2);
+}
+
+.import-page > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.import-page > summary:hover {
+  background: var(--tint);
+}
+
+.import-page > summary .import-page-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-page > .import-error {
+  padding: 0 10px 8px;
+}
+
+.import-page > .import-callout {
+  margin: 0 10px 10px;
+}
+
+.import-questions {
+  margin: 0;
+  border-top: 1px solid var(--ink);
+}
+
+.import-questions li {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.import-questions li:last-child {
+  border-bottom: none;
+}
+
+.import-questions li.dup {
+  opacity: 0.6;
+}
+
+.import-q-no {
+  flex: 0 0 22px;
+  padding-top: 2px;
+  color: var(--mute);
+  font: 13px var(--song);
+  text-align: right;
+}
+
+.import-q-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-q-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 4px;
+}
+
+.import-q-text {
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.import-q-src {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--mute);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-done {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.import-done-note {
+  margin: 8px 0 0;
+  color: var(--mute);
+  font-size: 13px;
+  line-height: 1.6;
+}

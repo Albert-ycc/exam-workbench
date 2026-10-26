@@ -1,0 +1,157 @@
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.ui-btn svg {
+  flex: 0 0 auto;
+}
+.ui-btn:hover:not(:disabled, [aria-pressed='true']) {
+  background: var(--hover);
+}
+.ui-btn:active:not(:disabled, [aria-pressed='true']) {
+  background: #eaeae6;
+}
+.ui-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ui-btn[aria-pressed='true'] {
+  background: var(--bb-bg);
+  border-color: var(--bb);
+  color: var(--bb);
+}
+.ui-btn--block {
+  display: flex;
+  width: 100%;
+}
+.ui-btn--sm {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* 主操作：蓝黑墨水 */
+.ui-btn--primary {
+  background: var(--bb);
+  border-color: var(--bb);
+  color: #fff;
+}
+.ui-btn--primary:hover:not(:disabled) {
+  background: var(--bb-2);
+  border-color: var(--bb-2);
+}
+.ui-btn--primary:active:not(:disabled) {
+  background: #0f2040;
+}
+
+/* 危险：红笔，用在二次确认处 */
+.ui-btn--danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.ui-btn--danger:hover:not(:disabled) {
+  background: var(--red-2);
+  border-color: var(--red-2);
+}
+.ui-btn--danger:active:not(:disabled) {
+  background: #8c221d;
+}
+
+/* 无边框 */
+.ui-btn--ghost,
+.ui-btn--danger-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+.ui-btn--ghost:hover:not(:disabled, [aria-pressed='true']) {
+  background: #f1f1ee;
+  color: var(--ink);
+}
+.ui-btn--danger-ghost {
+  color: var(--red);
+}
+.ui-btn--danger-ghost:hover:not(:disabled, [aria-pressed='true']) {
+  background: var(--red-bg);
+}
+
+/* 行内链接式：没有高度和内边距，跟着文字走 */
+.ui-btn--link {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--bb);
+  font-size: inherit;
+  line-height: inherit;
+}
+.ui-btn--link:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 红点角标：有改动 */
+.ui-btn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  flex: 0 0 auto;
+}
+
+.ui-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.ui-icon-btn--sm {
+  width: 24px;
+  height: 24px;
+}
+.ui-icon-btn:hover:not(:disabled, [aria-pressed='true']) {
+  background: #f1f1ee;
+  color: var(--ink);
+}
+.ui-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.ui-icon-btn[aria-pressed='true'] {
+  background: var(--bb-bg);
+  color: var(--bb);
+}
+.ui-icon-btn--danger-ghost {
+  color: var(--red);
+}
+.ui-icon-btn--danger-ghost:hover:not(:disabled) {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.ui-icon-btn--default {
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}

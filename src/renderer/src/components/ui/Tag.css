@@ -1,0 +1,37 @@
+.ui-tag {
+  display: inline-block;
+  padding: 0 5px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ink);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.ui-tag--md {
+  font-size: 13px;
+  line-height: 20px;
+}
+.ui-tag--plain {
+  padding: 0;
+  border-color: transparent;
+  color: var(--mute);
+}
+.ui-tag--ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.ui-tag--warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.ui-tag--red {
+  border-color: var(--red);
+  color: var(--red);
+}
+.ui-tag--blue {
+  border-color: var(--bb);
+  background: var(--bb-bg);
+  color: var(--bb);
+}

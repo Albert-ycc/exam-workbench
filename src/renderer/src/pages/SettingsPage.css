@@ -1,0 +1,136 @@
+/* 设置：校样台上的一张白纸，分段用黑色发丝线，名称在左、内容在右 */
+.st-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px 40px;
+}
+
+.st-sheet {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 36px 8px;
+  border: 1px solid #d2d4cf;
+  background: var(--paper);
+  box-shadow: var(--shadow-paper);
+}
+
+.st-sheet h1 {
+  margin: 0 0 8px;
+  font: 700 22px var(--song);
+  letter-spacing: 2px;
+}
+
+.st-section {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  column-gap: 28px;
+  padding: 20px 0 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.st-section:first-of-type {
+  border-top: 2px solid var(--ink);
+}
+
+.st-section h2 {
+  margin: 2px 0 0;
+  font: 700 16px var(--song);
+  letter-spacing: 1px;
+}
+
+.st-body {
+  min-width: 0;
+}
+
+.st-hint {
+  margin: 0 0 12px;
+  color: var(--mute);
+  line-height: 1.7;
+}
+
+.st-path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.st-path code {
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--tint);
+  font: 13px Consolas, Menlo, monospace;
+  word-break: break-all;
+}
+
+.st-stats {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 16px;
+}
+
+.st-stats > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.st-stat-num {
+  font: 700 24px var(--song);
+}
+
+.st-stat-label {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.st-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-version {
+  font: 700 18px var(--song);
+}
+
+.st-keys {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.st-keys th,
+.st-keys td {
+  padding: 7px 10px;
+  border: 1px solid var(--ink);
+  text-align: left;
+  font-weight: 400;
+}
+
+.st-keys thead th {
+  background: var(--tint);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.st-keys tbody th {
+  width: 220px;
+  background: transparent;
+  white-space: nowrap;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  margin: 0 2px;
+  padding: 0 6px;
+  border: 1px solid var(--ink);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  font: 13px/20px var(--song);
+  text-align: center;
+}

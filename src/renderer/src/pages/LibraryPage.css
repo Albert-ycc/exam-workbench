@@ -1,0 +1,203 @@
+/* 试题库页：左侧筛选栏 + 右侧题目表（方向 C：白底、发丝线、黑色粗细线收边） */
+.lb-page {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.lb-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.lb-label {
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--ink);
+  font: 700 14px var(--song);
+  letter-spacing: 1px;
+}
+
+.lb-types,
+.lb-sub {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lb-types button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid #efefec;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  text-align: left;
+}
+
+.lb-types button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-types button em {
+  flex: 0 0 auto;
+  color: var(--mute);
+  font: normal 14px var(--song);
+}
+
+.lb-types button:hover:not(:disabled):not(.is-on) {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.lb-types button.is-on {
+  background: var(--bb);
+  color: #fff;
+  font-weight: 700;
+}
+
+.lb-types button.is-on em {
+  color: #fff;
+}
+
+.lb-types button:focus-visible {
+  outline-offset: -2px;
+}
+
+.lb-sub button {
+  height: 27px;
+  padding-left: 24px;
+  font-size: 13px;
+}
+
+.lb-reset {
+  align-self: flex-start;
+  padding-left: 0;
+}
+
+.lb-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lb-head {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 56px;
+  padding: 10px 24px;
+}
+
+.lb-head h1 {
+  margin: 0;
+  font: 700 20px var(--song);
+  letter-spacing: 1px;
+}
+
+.lb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 340px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--ink);
+  font-size: 13px;
+}
+
+.lb-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-chip button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.lb-chip button:hover:not(:disabled) {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.lb-total {
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.lb-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* 表头与行共用同一组列宽；列表自己滚动，滚动条槽位固定，表头右边多留 10px 对齐 */
+.lb-thead,
+.lb-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) minmax(170px, 250px) 132px;
+  column-gap: 20px;
+}
+
+.lb-thead {
+  flex: 0 0 auto;
+  align-items: center;
+  height: 34px;
+  padding: 0 34px 0 24px;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.lb-thead > span:last-child {
+  text-align: right;
+}
+
+.lb-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.lb-empty {
+  margin: 48px 24px;
+}
+
+.lb-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 24px;
+}

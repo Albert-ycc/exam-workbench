@@ -1,0 +1,293 @@
+/* ---------- TextInput / NumberInput 外框 ---------- */
+.ui-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+}
+.ui-input--sm {
+  height: 28px;
+  font-size: 13px;
+}
+.ui-input:hover:not(.is-disabled, .is-invalid, :focus-within) {
+  border-color: var(--ink);
+}
+.ui-input:focus-within {
+  border-color: var(--bb);
+  box-shadow: 0 0 0 1px var(--bb);
+}
+.ui-input.is-invalid {
+  border-color: var(--red);
+}
+.ui-input.is-invalid:focus-within {
+  box-shadow: 0 0 0 1px var(--red);
+}
+.ui-input.is-disabled {
+  background: var(--tint);
+  color: var(--mute);
+}
+.ui-input input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  font: inherit;
+  color: inherit;
+}
+.ui-input input:focus {
+  box-shadow: none;
+}
+.ui-input-leading {
+  display: inline-flex;
+  color: var(--mute);
+}
+.ui-input-clear {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--mute);
+}
+.ui-input-clear:hover:not(:disabled) {
+  background: #f1f1ee;
+  color: var(--ink);
+}
+
+/* 卷面上直接改字：无框，一条点线 */
+.ui-input--underline {
+  height: auto;
+  padding: 0 2px;
+  border-width: 0 0 1px;
+  border-style: dotted;
+  border-radius: 0;
+  background: transparent;
+}
+.ui-input--underline:focus-within {
+  border-style: solid;
+  border-color: var(--bb);
+  box-shadow: none;
+}
+
+/* ---------- Select ---------- */
+.ui-select {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.ui-select select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.ui-select--sm select {
+  height: 28px;
+  font-size: 13px;
+}
+.ui-select:not(.is-invalid) select:hover:not(:disabled, :focus) {
+  border-color: var(--ink);
+}
+.ui-select select:disabled {
+  cursor: default;
+}
+.ui-select.is-invalid select {
+  border-color: var(--red);
+}
+.ui-select > svg {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  color: var(--mute);
+  pointer-events: none;
+}
+
+/* ---------- NumberInput ---------- */
+.ui-num {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* 不合法时的提示：浮在输入框下方，不挤动周围排版 */
+.ui-num-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 2px 8px;
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  color: var(--red-2);
+  font: 400 12px/1.6 var(--ui);
+  pointer-events: none;
+}
+.ui-num-field {
+  width: 88px;
+}
+.ui-num-field input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ui-num-unit {
+  color: var(--mute);
+}
+.ui-num-minus {
+  width: 10px;
+  height: 0;
+  border-top: 1.8px solid currentColor;
+}
+.ui-num .ui-icon-btn--default {
+  width: 32px;
+  height: 32px;
+  color: var(--ink);
+}
+/* 卷面大题头里的分值小方框：1px 黑框、Times 粗体数字 */
+.ui-num-field--inline {
+  width: auto;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 3px;
+  border-color: var(--ink);
+  font: 700 14px var(--song);
+}
+.ui-num-field--inline input {
+  field-sizing: content;
+  min-width: 1.4em;
+  text-align: center;
+}
+
+/* ---------- Checkbox ---------- */
+.ui-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  line-height: 1.5;
+}
+.ui-check.is-disabled {
+  cursor: default;
+  color: var(--mute);
+}
+.ui-check input {
+  appearance: none;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--ink);
+  border-radius: 1px;
+  background: var(--paper) center / 12px no-repeat;
+  cursor: inherit;
+}
+.ui-check input:hover:not(:disabled, :checked, :indeterminate) {
+  background-color: var(--hover);
+}
+.ui-check input:checked {
+  border-color: var(--bb);
+  background-color: var(--bb);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+.ui-check input:indeterminate {
+  border-color: var(--bb);
+  background-color: var(--bb);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 12h12'/%3E%3C/svg%3E");
+}
+.ui-check input:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- Segmented ---------- */
+.ui-seg {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.ui-seg-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.ui-seg--sm .ui-seg-item {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.ui-seg-item + .ui-seg-item {
+  border-left: 1px solid var(--ink);
+}
+.ui-seg-item input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.ui-seg-item:hover:not([aria-disabled], :has(input:checked)) {
+  background: var(--hover);
+}
+.ui-seg-item:has(input:checked) {
+  background: var(--bb);
+  color: #fff;
+}
+.ui-seg-item:has(input:focus-visible) {
+  z-index: 1;
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+.ui-seg-item[aria-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Select 的聚焦：下拉框自己的类选择器压过了全局零权重的聚焦样式，这里补上 */
+.ui-select select:focus,
+.ui-select select:focus-visible {
+  outline: none;
+  border-color: var(--bb);
+  box-shadow: 0 0 0 1px var(--bb);
+}
+.ui-select.is-invalid select:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}

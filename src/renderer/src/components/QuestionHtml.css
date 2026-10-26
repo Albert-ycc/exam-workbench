@@ -1,0 +1,53 @@
+.question-html {
+  line-height: 1.75;
+  word-break: break-word;
+}
+
+.question-html img {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.question-html table {
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+
+.question-html td,
+.question-html th {
+  padding: 2px 8px;
+  vertical-align: top;
+}
+
+.question-html p {
+  margin: 0;
+}
+
+/* 原页面带框线的数据表；排版用的表格（无标记）与选项表不画框线 */
+.question-html table[data-role='bordered'] td,
+.question-html table[data-role='bordered'] th {
+  border: 1px solid #b8bec8;
+}
+
+/* 选项表里的小题号格 */
+.question-html td[data-role='option-label'] {
+  white-space: nowrap;
+  padding-right: 4px;
+}
+
+/* 着重号 */
+.question-html em[data-role='dot'] {
+  font-style: normal;
+  text-emphasis: filled dot;
+  text-emphasis-position: under right;
+}
+
+.question-html [data-role='right-aligned'] {
+  text-align: right;
+}
+
+/* 书面表达的长下划线没有空格，允许任意位置折行 */
+.question-html [data-role='writing-lines'] {
+  word-break: break-all;
+  line-height: 2;
+}

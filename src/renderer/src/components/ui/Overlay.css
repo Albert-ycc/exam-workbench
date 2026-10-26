@@ -1,0 +1,206 @@
+/* ---------- Modal ---------- */
+.ui-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 26, 26, 0.38);
+}
+.ui-modal {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  outline: none;
+}
+.ui-modal--sm {
+  width: 400px;
+}
+.ui-modal--lg {
+  width: 640px;
+}
+.ui-modal--wide {
+  width: min(960px, calc(100vw - 64px));
+  height: calc(100vh - 64px);
+  max-height: none;
+}
+.ui-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 20px;
+  border-bottom: 1px solid var(--ink);
+}
+.ui-modal-head h2 {
+  margin: 0;
+  font: 700 17px var(--song);
+  letter-spacing: 1px;
+}
+.ui-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px;
+  line-height: 1.7;
+}
+.ui-modal-body--flush {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.ui-modal-body p {
+  margin: 0 0 8px;
+}
+.ui-modal-body p:last-child {
+  margin-bottom: 0;
+}
+.ui-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--rule);
+}
+
+/* ---------- Drawer：右侧停靠，与主内容并排，不盖住它 ---------- */
+.ui-drawer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  outline: none;
+}
+.ui-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 8px 16px;
+}
+.ui-drawer-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ink);
+  font: 700 16px var(--song);
+  letter-spacing: 1px;
+}
+.ui-drawer-head .ui-icon-btn {
+  align-self: flex-start;
+  margin-top: -2px;
+}
+.ui-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 16px 16px;
+}
+.ui-drawer-foot {
+  padding: 10px 16px;
+  border-top: 1px solid var(--rule);
+}
+
+/* ---------- Toast ---------- */
+.ui-toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.ui-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  box-shadow: var(--shadow-float);
+}
+.ui-toast-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ui-toast-action {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: #c9d8ef;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.ui-toast-action:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.ui-toast-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: #b9bbb5;
+}
+.ui-toast-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.ui-toast :focus-visible {
+  outline-color: #fff;
+  outline-offset: 0;
+}
+/* 出错：白底红边，红笔批注的样子 */
+.ui-toast--error {
+  background: var(--paper);
+  border-color: var(--red);
+  border-left-width: 4px;
+  color: var(--red-2);
+}
+.ui-toast--error .ui-toast-action {
+  color: var(--red-2);
+}
+.ui-toast--error .ui-toast-action:hover:not(:disabled),
+.ui-toast--error .ui-toast-close:hover:not(:disabled) {
+  background: var(--red-bg);
+  color: var(--red-2);
+}
+.ui-toast--error .ui-toast-close {
+  color: var(--red-2);
+}
+.ui-toast--error :focus-visible {
+  outline-color: var(--red);
+}
