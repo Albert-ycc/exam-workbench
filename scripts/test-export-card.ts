@@ -256,15 +256,15 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
 
   console.log('答题卡：页面 HTML')
   check('版式常量与本地答题卡一致：四角定位块 6.8 / 6.2mm、5×2.6mm，黑框 break-inside: avoid，页脚与顶部提示在页边距盒里', () => {
-    const html = renderCardHtml(buildCardDocument(snap([section('选择题', items(3, '单选题'), 4), section('解答题', [item('解答题-问答题')], 8)], '南安市柳南中学初一上第一单元测试')))
+    const html = renderCardHtml(buildCardDocument(snap([section('选择题', items(3, '单选题'), 4), section('解答题', [item('解答题-问答题')], 8)], '示例中学初一上第一单元测试')))
     assert.deepEqual([CARD_MARK.offsetX, CARD_MARK.offsetY, CARD_MARK.width, CARD_MARK.height], [6.8, 6.2, 5, 2.6])
     assert.deepEqual([CARD_PAGE.marginX, CARD_PAGE.marginTop], [13, 21.6])
     for (const c of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) assert.match(html, new RegExp(`@${c}-corner \\{ content: ""; background: linear-gradient\\(#000, #000\\) no-repeat (left|right) 6\\.8mm (top|bottom) 6\\.2mm / 5mm 2\\.6mm; \\}`))
     assert.match(html, /\.box \{[^}]*break-inside: avoid/)
     assert.match(html, /@page :first \{ margin-top: 12\.6mm; @top-center \{ content: none; \} \}/)
     assert.match(html, /@top-center \{ content: "请在各题目的答题区域内作答，超出黑色矩形边框限定区域的答案无效"/)
-    assert.match(html, /@bottom-center \{ content: "南安市柳南中学初一上第一单元测试 答题卡　第 " counter\(page\) " 页（共 " counter\(pages\) " 页）"/)
-    assert.match(html, /<h1 class="title">南安市柳南中学初一上第一单元测试　答题卡<\/h1>/)
+    assert.match(html, /@bottom-center \{ content: "示例中学初一上第一单元测试 答题卡　第 " counter\(page\) " 页（共 " counter\(pages\) " 页）"/)
+    assert.match(html, /<h1 class="title">示例中学初一上第一单元测试　答题卡<\/h1>/)
     assert.match(html, /班级<span class="line"><\/span><\/span><span class="f">座号.*小组.*姓名/s)
     assert.match(html, /注意事项/)
     assert.equal((html.match(/请在各题目的答题区域内作答，超出黑色矩形边框限定区域的答案无效/g) ?? []).length, 3, '第二页起的页顶提示（页边距盒）、第一页信息框下的提示、注意事项第 3 条')

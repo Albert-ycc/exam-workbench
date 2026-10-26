@@ -4,6 +4,12 @@
   "version": "0.4.4",
   "description": "组卷工作台：从组卷网入库试题、拖拽组卷、按配置导出 PDF / Word",
   "author": "Albert",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Albert-ycc/exam-workbench.git"
+  },
+  "homepage": "https://github.com/Albert-ycc/exam-workbench",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {

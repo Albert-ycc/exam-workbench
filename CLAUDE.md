@@ -6,6 +6,7 @@ Windows 桌面组卷应用：组卷网链接入库 → 拖拽组卷（试卷里�
 
 - `npm run dev` 开发模式；`npm run typecheck`；`npm test`（6 组单元测试）
 - 端到端：`node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning test/e2e/<名称>.e2e.ts [证据目录]`，各套构建到自己的 `out-<名称>/`；共用构建目录的几套由 `scripts/e2e/app.ts` 的目录锁排队，启动默认屏蔽外网，`library` 加 `--online` 才联网
+- 版本管理在 GitHub：`origin` = https://github.com/Albert-ycc/exam-workbench（公开仓库，MIT）。提交后 `git push`；提交作者用 `Albert <197743926+Albert-ycc@users.noreply.github.com>`，仓库里不放真名、学校名、外置盘路径之外的个人信息（公开页面的规矩见记忆 feedback_public_profile_no_real_name）。
 - 打包：`npm run dist:win` → `release/组卷工作台-<version>-安装程序.exe`，交付时拷到 `/Volumes/外置中枢/如鱼得水/试卷捕手/安装包/`（拷完用 `cmp` 核对；外置盘会多出 `._` 开头的元数据文件，删掉）；旧版安装程序由用户自己删，自动删除会被权限拦下
 
 ## 技术栈
