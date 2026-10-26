@@ -10,10 +10,10 @@ import type { DatabaseSync } from 'node:sqlite'
 import { DEFAULT_EXPORT_OPTIONS, type DraftSection, type ExportOptions, type PaperItem, type PaperSnapshot } from '../src/shared/domain.ts'
 import { formatQuestionNos } from '../src/shared/export.ts'
 import { checkDraft } from '../src/main/export/check.ts'
-import { CARD_CONFIG, blankCount, buildCardDocument, cardKindOf, subQuestionCount, type CardBlock } from '../src/main/export/card.ts'
+import { CARD_CONFIG, blankCount, buildCardDocument, cardKindOf, subQuestionCount, type CardBlock, type SolveBlock } from '../src/main/export/card.ts'
 import { buildExportDocument, exportHeadings } from '../src/main/export/document.ts'
 import { buildDocx, collectMeasureRequests, estimateTextWidth, type DocxImage } from '../src/main/export/docx.ts'
-import { blockify, parseHtml } from '../src/main/export/html-tree.ts'
+import { blockify, parseHtml, textContent } from '../src/main/export/html-tree.ts'
 import { countPdfPages } from '../src/main/export/pdf-pages.ts'
 import { CARD_MARK, CARD_PAGE, renderCardHtml } from '../src/main/export/render-card-html.ts'
 import { renderHtml } from '../src/main/export/render-html.ts'
@@ -193,6 +193,21 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
     assert.equal((html.match(/class="subq"/g) ?? []).length, 3 + 10)
     assert.match(html, /<div class="subq" style="height:24mm">（3）<\/div>/)
   })
+  check('计算题把题目抄在答题卡的框里（含公式图），解答、证明、作图题不抄', () => {
+    const calcStem = '<p>计算：</p><p>(1)<img src="ewb-asset://' + 'a'.repeat(64) + '.png" width="60" height="20">；</p><p>(2)乙．</p>'
+    const doc = buildCardDocument(
+      snap([
+        section('解答题', [item('解答题-计算题', { stemHtml: calcStem }), item('解答题-证明题', { stemHtml: '<p>求证：丙</p>' }), item('解答题-作图题')], 8),
+        section('计算题', [item('', { stemHtml: '<p>题型标签空时按大题名算计算题</p>' })], 6)
+      ])
+    )
+    const solves = doc.blocks.filter((b): b is SolveBlock => b.type === 'solve')
+    assert.deepEqual(solves.map((b) => (b.stem ? textContent(b.stem) : null)), ['计算：(1)；(2)乙．', null, null, '题型标签空时按大题名算计算题'])
+    const html = renderCardHtml(doc)
+    assert.match(html, /<div class="qh"><span class="qno">1\.<\/span>（8 分）<\/div><div class="stem"><p>计算：<\/p><p>\(1\)<img src="ewb-asset:\/\/a{64}\.png" width="60" height="20">；<\/p><p>\(2\)乙．<\/p><\/div><div class="subq"/, '框头之后、作答区之前是题目')
+    assert.equal((html.match(/class="stem"/g) ?? []).length, 2, '只有两道计算题带题目')
+    assert.match(html, /img-src ewb-asset: data:/, '答题卡页面的 CSP 放行本地图片')
+  })
 
   check('书面表达：横线格，行数取题干里作答横线的折算值，没有横线用默认行数', () => {
     const long = `<p>请写一篇短文。</p><div data-role="writing-lines">${'_'.repeat(300)}</div>`
@@ -278,17 +293,17 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
   check('全卷满分、大题说明、题号后的分值标注都调用 shared/numbering 的函数；全部设分才有全卷满分', () => {
     const doc = buildExportDocument(scoredSnapshot, opts())
     assert.equal(doc.totalNote, '（全卷满分：20分）')
-    assert.deepEqual(doc.sections.map((s) => s.scoreNote), ['（共 2 小题，满分 7 分）', '（共 3 小题，每小题 1 分，共 3 分）', '（共 1 小题，每小题 10 分，共 10 分）'])
+    assert.deepEqual(doc.sections.map((s) => s.scoreNote), ['（共2小题，满分7分）', '（共3小题，每小题1分，共3分）', '（共1小题，每小题10分，共10分）'], '试卷正文用紧凑写法（paperSectionNote）')
     assert.deepEqual(doc.sections.map((s) => s.heading), ['一、选择题', '二、完形填空', '三、解答题'])
     const text = (n: number, k: number): string => JSON.stringify(doc.sections[n].items[k].body)
-    assert.match(text(0, 0), /1\./)
+    assert.match(text(0, 0), /1．/, '题号用全角句点')
     const html = renderHtml(doc)
     assert.match(html, /<p class="paper-total">（全卷满分：20分）<\/p>/)
-    assert.match(html, /<h2 class="section-heading">一、选择题（共 2 小题，满分 7 分）<\/h2>/)
-    assert.match(html, /<p>1\.（本题 4 分）下列正确的是/)
-    assert.match(html, /<p>2\.（本题 3 分）题干/)
-    assert.match(html, /<p>（每小题 1 分，共 3 分）Tom 3 is 4\./, '多小题块没有块首题号，分值说明在最前')
-    assert.match(html, /<p>6\.（本题 10 分）求值/)
+    assert.match(html, /<h2 class="section-heading">一、选择题（共2小题，满分7分）<\/h2>/)
+    assert.match(html, /<p>1．\(本题4分\)下列正确的是/, '题号后的分值用半角括号、不留空格，紧跟题干')
+    assert.match(html, /<p>2．\(本题3分\)题干/)
+    assert.match(html, /<p>\(每小题1分，共3分\)Tom 3 is 4\./, '多小题块没有块首题号，分值说明在最前')
+    assert.match(html, /<p>6．\(本题10分\)求值/)
   })
   check('没设全分值时：没有全卷满分；一题都没设分的大题标题保持原样；设了分的题才标分值', () => {
     const partial = structuredClone(scoredSnapshot)
@@ -298,23 +313,23 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
     partial.sections[2].items[0].score = 6
     const doc = buildExportDocument(partial, opts())
     assert.equal(doc.totalNote, '')
-    assert.deepEqual(doc.sections.map((s) => s.scoreNote), ['', '（共 3 小题，每小题 1 分，共 3 分）', '（共 1 小题，每小题 6 分，共 6 分）'])
+    assert.deepEqual(doc.sections.map((s) => s.scoreNote), ['', '（共3小题，每小题1分，共3分）', '（共1小题，每小题6分，共6分）'])
     const body = renderHtml(doc).split('<body>')[1]
     assert.doesNotMatch(body, /paper-total/, '没有全卷满分行')
     assert.equal((body.match(/本题/g) ?? []).length, 1, '只有设了分值的那一题标分值，选择题不标')
     const none = buildExportDocument(snap([section('选择题', [item('单选题')])]), opts())
     assert.deepEqual([none.totalNote, none.sections[0].scoreNote], ['', ''])
-    assert.match(renderHtml(none).split('<body>')[1], /<p>1\. 题干/, '旧试卷：题号后只有一个空格，没有分值')
+    assert.match(renderHtml(none).split('<body>')[1], /<p>1．题干/, '旧试卷：题号后直接是题干，没有分值')
     const mixed = structuredClone(scoredSnapshot)
     mixed.sections[0].items[0].score = null
     mixed.sections[0].defaultScore = null
-    assert.equal(buildExportDocument(mixed, opts()).sections[0].scoreNote, '（共 2 小题）', '部分设分的大题沿用 sectionScoreNote：只写题数')
+    assert.equal(buildExportDocument(mixed, opts()).sections[0].scoreNote, '（共2小题）', '部分设分的大题沿用 sectionScoreNote：只写题数')
   })
   check('分值说明与来源「题文前」并存：题号、分值、来源依次排在题干前', () => {
     const labelled = structuredClone(scoredSnapshot)
     labelled.sections[0].items[0].sourceLabel = '26-27七年级上·样例市·月考'
     const html = renderHtml(buildExportDocument(labelled, opts({ sourcePosition: 'before-stem' })))
-    assert.match(html, /<p>1\.（本题 4 分）<span data-role="source">（26-27七年级上·样例市·月考）<\/span>下列正确的是/)
+    assert.match(html, /<p>1．\(本题4分\)<span data-role="source">（26-27七年级上·样例市·月考）<\/span>下列正确的是/)
   })
   check('抬头有「班级 座号 小组 姓名」填写行（学生版与教师版都有），PDF 用带下边框的行内块', () => {
     for (const o of [opts(), opts({ answerPosition: 'end' }), opts({ answerPosition: 'after' })]) {
@@ -347,8 +362,8 @@ export async function runRound2Tests(env: Round2Env): Promise<void> {
     assert.equal((info.match(/w:leader="underscore"/g) ?? []).length, 4)
     assert.equal((info.match(/<w:tab\/>/g) ?? []).length, 7, '4 个横线 + 3 个间隔')
     assert.ok(['班级', '座号', '小组', '姓名'].every((l) => info.includes(l)))
-    assert.match(plainText, /一、选择题（共 2 小题，满分 7 分）/)
-    assert.match(plainText, /1\.（本题 4 分）下列正确的是/)
+    assert.match(plainText, /一、选择题（共2小题，满分7分）/)
+    assert.match(plainText, /1．\(本题4分\)下列正确的是/)
     const plain = await docxParts(buildExportDocument(snap([section('选择题', [item('单选题')])]), opts({ format: 'docx' })))
     assert.doesNotMatch(plain.xml.replace(/<[^>]+>/g, ''), /全卷满分|本题/)
     assert.ok(plain.xml.includes('班级'), '没设分值的旧试卷也有填写行')

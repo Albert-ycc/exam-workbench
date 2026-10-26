@@ -125,7 +125,7 @@ try {
   })
   check('题号并入第一段，完形填空的小题号占位符按全卷题号填好', () => {
     const doc = build({})
-    assert.match(textOfItem(doc.sections[0].items[0].body), /^1\. 下列说法正确的是（　　）/)
+    assert.match(textOfItem(doc.sections[0].items[0].body), /^1．下列说法正确的是（　　）/)
     const cloze = textOfItem(doc.sections[4].items[0].body)
     assert.doesNotMatch(cloze, /^\d/) // 多小题块不加块首题号
     assert.match(cloze, /He 5____ from Canada.*likes 6____ very much.*often 7____ basketball/)
@@ -134,7 +134,7 @@ try {
   })
   check('来源「题文前」：单题在题号之后、题干之前；多小题块放在最前面', () => {
     const doc = build({ sourcePosition: 'before-stem' })
-    assert.match(textOfItem(doc.sections[0].items[0].body), new RegExp(`^1\\.（${SOURCE_MATH}）下列说法正确的是`))
+    assert.match(textOfItem(doc.sections[0].items[0].body), new RegExp(`^1．（${SOURCE_MATH}）下列说法正确的是`))
     assert.match(textOfItem(doc.sections[4].items[0].body), new RegExp(`^（${SOURCE_ENGLISH}）Tom is a new student`))
     const html = renderHtml(doc)
     assert.equal((html.match(/data-role="source"/g) ?? []).length, 6)
@@ -143,7 +143,7 @@ try {
     const blank: PaperSnapshot = { ...snapshot, sections: snapshot.sections.map((s) => ({ ...s, items: s.items.map((i) => ({ ...i, sourceLabel: '  ' })) })) }
     const doc = buildExportDocument(blank, { ...DEFAULT_EXPORT_OPTIONS, sourcePosition: 'before-stem' })
     assert.doesNotMatch(renderHtml(doc), /（）/)
-    assert.match(textOfItem(doc.sections[0].items[0].body), /^1\. 下列说法正确的是/)
+    assert.match(textOfItem(doc.sections[0].items[0].body), /^1．下列说法正确的是/)
   })
   check('来源「不显示」「答案处」时题干里没有来源', () => {
     for (const o of [{ sourcePosition: 'none' as const }, { sourcePosition: 'answer' as const, answerPosition: 'end' as const }]) {
@@ -235,7 +235,7 @@ try {
       body.map((n) => (n.type === 'el' ? `${n.tag}${n.attrs['data-role'] ? '#' + n.attrs['data-role'] : ''}:${n.attrs['data-role'] === 'writing-lines' ? n.children.length : ''}` : 'text')),
       ['p:', 'div#writing-lines:10', 'p:', 'div#writing-lines:6']
     )
-    assert.equal(textOfItem([body[0]]), '1. Dear Tom,')
+    assert.equal(textOfItem([body[0]]), '1．Dear Tom,')
     assert.equal(textOfItem([body[2]]), 'Yours, Li ____')
   })
 
@@ -289,7 +289,12 @@ try {
     const optionsParagraph = xml.split('</w:p>').find((p) => p.includes('A．①②'))!
     assert.equal((optionsParagraph.match(/<w:tab\/>/g) ?? []).length, 3)
     assert.match(optionsParagraph, /<w:tabs>(<w:tab w:val="left" w:pos="\d+"\/>){3}<\/w:tabs>/)
-    assert.match(xml, /w:eastAsia="黑体"/, '标题与大题用黑体')
+    assert.doesNotMatch(xml, /w:eastAsia="黑体"/, '标题与大题改用宋体加粗，照手排试卷')
+    const titleParagraph = xml.split('</w:p>')[0] // 正文第一段就是试卷标题
+    assert.match(titleParagraph, /<w:b\/>/)
+    assert.match(titleParagraph, /w:eastAsia="宋体"/)
+    assert.match(titleParagraph, /<w:spacing w:val="10"\/>/, '标题字距 0.5pt')
+    assert.match(optionsParagraph, /<w:ind w:left="\d+"/, '选项整体缩进')
     assert.match(xml, /w:position w:val="-\d+"/, '与文字同行的公式图下移，半磅整数')
     assert.match(xml, /一、选择题（每题 3 分）/)
     assert.equal((xml.match(/<w:drawing>/g) ?? []).length, 2, '公式图与数轴图')
@@ -394,7 +399,7 @@ try {
     const body = await xml()
     const paras = body.split('</w:p>')
     assert.match(paras.find((p) => p.includes('本题 8 分'))!, /<w:jc w:val="right"\/>/)
-    assert.doesNotMatch(paras.find((p) => p.includes('>1.<'))!, /<w:jc /)
+    assert.doesNotMatch(paras.find((p) => p.includes('>1．'))!, /<w:jc /)
   })
   await check('书面表达的 <div data-role="writing-lines">（里面是原下划线文本）：加作答区域折成横线行，不加则还原成可折行的段落', async () => {
     const stem = `<p>请以「我的学校」为题写一篇短文。</p><div data-role="writing-lines">${'_'.repeat(490)}</div>`
@@ -529,7 +534,7 @@ try {
   })
   await check('Word：题号所在的第一段与下一段同页，卷尾答案每题一行不拆页，有留白的整题与留白同页', async () => {
     const xml = await docxXml({})
-    const first = xml.split('</w:p>').find((p) => p.includes('>1.<'))!
+    const first = xml.split('</w:p>').find((p) => p.includes('>1．'))!
     assert.match(first, /<w:keepNext\/>/)
     const second = xml.split('</w:p>').find((p) => p.includes('则 a 一定是负数') || p.includes('若 '))!
     assert.doesNotMatch(second, /<w:keepNext\/>/)

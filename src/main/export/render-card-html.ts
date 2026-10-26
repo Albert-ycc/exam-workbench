@@ -2,7 +2,7 @@
 // 版式按本地答题卡一比一：A4、四角黑色定位块、标题、信息框、第一页信息框下与其余页顶部的提示、按大题的黑框、页脚。
 // 定位块、顶部提示、页脚用 Chromium 的页边距盒（@page 的 @top-left-corner 等）画，黑框用 break-inside: avoid 流式分页，
 // 实测（调研报告 05）定位块误差 ≤0.2mm，黑框不会被拆开。
-import { escapeText } from './html-tree.ts'
+import { escapeText, serializeNodes } from './html-tree.ts'
 import type { BlankBlock, CardBlock, CardDocument, CardHeading, ChoiceBlock, SolveBlock, WritingBlock } from './card.ts'
 import { CARD_CONFIG } from './card.ts'
 
@@ -94,6 +94,15 @@ h1.title { text-align: center; font-family: ${FONT_HEAD}; font-weight: bold; fon
 .blank .it .line { flex: 1; margin-left: 2.2mm; }
 /* 解答 / 计算 / 证明 / 作图：框头 + 作答区；有小问时按小问用虚线分隔 */
 .qh { margin-top: 0.6mm; }
+/* 计算题抄在框里的题目：行距与试卷正文接近，公式图按原尺寸 */
+.stem { padding: 0.4mm 0.6mm 1.2mm; line-height: 1.7; }
+.stem p { margin: 0 0 0.6mm; }
+.stem img { max-width: 100%; vertical-align: middle; }
+.stem img[width][height] { height: auto; }
+.stem table { border-collapse: collapse; margin: 0.5mm 0; }
+.stem td, .stem th { padding: 0.5mm 2mm; vertical-align: middle; }
+.stem table[data-role="bordered"] td, .stem table[data-role="bordered"] th { border: 0.25mm solid #333; }
+.stem em[data-role="dot"] { font-style: normal; text-emphasis: filled dot; text-emphasis-position: under; }
 .subq { border-top: 1pt dashed #777; padding-top: 1.8mm; }
 .qh + .subq { border-top: 0; }
 /* 书面表达：横线格。最后一行的横线就是黑框的下边 */
@@ -134,7 +143,8 @@ function solveHtml(b: SolveBlock): string {
     b.areas.length > 1
       ? b.areas.map((mm, k) => `<div class="subq" style="height:${mm}mm">（${k + 1}）</div>`).join('')
       : `<div class="free" style="height:${b.areas[0]}mm"></div>`
-  return `<div class="box solve">${headingHtml(b.heading)}${boxHead(b)}${areas}</div>`
+  const stem = b.stem ? `<div class="stem">${serializeNodes(b.stem)}</div>` : ''
+  return `<div class="box solve">${headingHtml(b.heading)}${boxHead(b)}${stem}${areas}</div>`
 }
 
 function writingHtml(b: WritingBlock): string {
@@ -149,7 +159,7 @@ export function renderCardHtml(doc: CardDocument): string {
 <div class="r"><div class="h">注意事项</div>${CARD_NOTES.map((n) => `<div>${escapeText(n)}</div>`).join('')}</div></div>`
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ewb-asset: data:; style-src 'unsafe-inline'">
 <title>${escapeText(doc.title)} 答题卡</title><style>${css(doc)}</style></head>
 <body>
 <h1 class="title">${escapeText(doc.title)}　答题卡</h1>

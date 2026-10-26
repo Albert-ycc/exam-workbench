@@ -16,6 +16,7 @@ Electron 44 + electron-vite 5 + React 19 + TypeScript 5.9；SQLite 用内置 `no
 
 - 大题序号、题号、分值合计与分值说明只用 `src/shared/numbering.ts`（题目块占的题号数 `numberCountOf`、展开题号 `blockNos`、「有没有内容」`hasVisibleContent` 也在这里；导出排版上「这段要不要排出来」是 `export/html-tree.ts` 的 `hasRenderableContent`，用途不同）；复制题目副本、按题型找大题只用 `src/shared/draft.ts`。界面与导出不另写一套。
 - IPC 入口的来源与 id 校验只用 `src/main/ipc-guard.ts`；界面的时间格式与错误文案只用 `src/renderer/src/components/ui/format.ts`。
+- 试卷正文的写法照手排的单元测试卷：题号「1．」（全角句点，`export/document.ts` 的 `questionNoText`）、分值说明 `paperSectionNote`「（共10小题，每小题4分，共40分）」与 `paperItemNote`「(本题4分)」（数字两侧不留空格，都在 `shared/numbering.ts`）；答题卡沿用带空格的 `sectionScoreNote` / `boxScoreLabel`，照本地答题卡。编辑器界面显示的仍是带空格的写法。
 - 分值按题号计：`item.score` 覆盖 `section.defaultScore`，只在设了时写进草稿（旧草稿序列化不变）。
 - 草稿里题目 id、大题 id 必须唯一：`saveDraft` / `saveEdits` 遇到重复直接拒绝，读库时给重复的那份按原 id 加序号派生新 id（确定性，同一份数据每次读出来一样，否则草稿永远与最新版本对不上）。
 - 题干不含开头题号；多小题块用 `<span data-ewb-qno="k">` 占位；图片地址 `ewb-asset://<sha256>.<ext>`；存储 HTML 走白名单，版式语义用 `data-role`。
@@ -37,4 +38,5 @@ Electron 44 + electron-vite 5 + React 19 + TypeScript 5.9；SQLite 用内置 `no
 - 2026-10-26 深度排查一轮后出 0.4.1：五路只读评审报 52 条（无阻断），修了 47 条。要点：下载流程的存版本、比对快照、落盘、记录放进同一事务（不再留孤儿版本）；读库修复重复 id 改确定性派生；自检与导出的「有没有答案」统一为 `hasVisibleContent`；关键词筛选一次请求只扫一遍题干（5000 题一次按键 451ms → 196ms）；无编号题指纹只按图片地址算；图片原子写入；删试卷的 8 秒撤销不再被顶掉或合并丢失；端到端默认离线并给构建目录加锁。单元测试 6 组 241 项、端到端 18 套全过（`export-real` / `export-card-real` 需联网或真实数据，未跑）。
 - 没做与待拍板：升级前入库的无编号题指纹按旧算法（无法重算，再入同一道会多一道；样本里无编号题从未出现）；答题卡对实验、作图、综合、作文类题型一律按填空横线排（用户 2026-10-26 定：先维持，等 Windows 实测后再定要不要单独版式）；大题未设分时试卷标题不写「（共 N 小题）」而答题卡写，规则分在 `document.ts` 与 `numbering.ts` 两处；只有 viewBox 没宽高的 SVG 在 Word 导出的尺寸读取要在 Electron 里实测；应用没有自己的图标。
 - 2026-10-26 出 0.4.2：用户反馈 Windows 上更新时安装程序报「正在运行」却关不掉。根因是主窗口关了程序可能留在后台（导出用的隐藏窗口让 window-all-closed 不触发、退出流程卡住），而 electron-builder 默认只会结束进程、结束不了就让用户「手动关闭」。改法三层：主窗口关闭即退出、退出前销毁全部隐藏窗口、5 秒看门狗强制结束；`--quit` 参数经单实例通道请正在运行的那份保存并退出；`build/installer.nsh` 自定义 `customCheckAppRunning`：先 `--quit` 等 8 秒，再 Stop-Process + taskkill /F /T，仍在才提示去任务管理器后重试。端到端 `quit` 覆盖前两层；安装脚本只在打包时编译校验过，运行行为要在 Windows 上从 0.4.1 更新到 0.4.2 时验（旧版不认 `--quit`，会走强制结束）。
-- 下一步等用户在 Windows 电脑上实测 0.4.2 后按反馈修改。
+- 2026-10-26 出 0.4.3：答题卡给计算题（题型标签或大题名含「计算」）在框头下抄上题干（含公式图，CSP 放行 ewb-asset:），其余题型不抄；试卷导出向手排的单元测试卷（`教学材料/七年级上/试卷/第一单元测试源文件/style.css`）对齐：题目行距 2 倍（Word 1.75 倍行距）、题号「1．」、分值说明不留空格且题后用半角括号、标题与大题标题宋体加粗（标题字距 0.5pt）、选项整体缩进 1.6 字。还差的一截是手排版按页摊开作答空白（每页余量按比例分给各题、页底不留白），要在 PDF 路径里量高度再排，Word 做不到，未做。
+- 下一步等用户在 Windows 电脑上实测 0.4.3 后按反馈修改。

@@ -44,6 +44,7 @@ export interface SolveBlock {
   heading: CardHeading | null
   label: string // 「17.」「28～30.」
   score: string // 「（8 分）」，未设分值为空
+  stem: HNode[] | null // 计算题把题目抄在答题卡上（学生对着算式作答），其余题型为 null
   areas: number[] // 作答区高度（毫米）；多于一个表示按小问分隔
 }
 export interface WritingBlock {
@@ -195,7 +196,7 @@ export function buildCardDocument(snapshot: PaperSnapshot): CardDocument {
       if (entry.kind === 'writing') blocks.push({ type: 'writing', heading: takeHeading(), label, score, lines: writingLines(entry.stem), lineMm: CARD_CONFIG.writingLineMm })
       else {
         const kind = answerAreaKind(section.title, entry.n.item.questionType) === 'calc' ? 'calc' : 'solve'
-        blocks.push({ type: 'solve', heading: takeHeading(), label, score, areas: solveAreas(entry.stem, kind, entry.n.lastNo - entry.n.firstNo + 1) })
+        blocks.push({ type: 'solve', heading: takeHeading(), label, score, stem: kind === 'calc' ? entry.stem : null, areas: solveAreas(entry.stem, kind, entry.n.lastNo - entry.n.firstNo + 1) })
       }
     }
   })

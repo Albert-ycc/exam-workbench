@@ -173,7 +173,7 @@ try {
   for (let n = 1; n <= paperPdf.pageCount!; n++) assert.ok(paperText.includes(`第${n}页（共${paperPdf.pageCount}页）`), `试卷 PDF 第 ${n} 页页脚`)
   assert.ok(paperText.includes('班级') && paperText.includes('座号') && paperText.includes('小组') && paperText.includes('姓名'))
   assert.ok(paperText.includes('一、选择题（每题3分）（共1小题，每小题3分，共3分）'), '大题标题后接分值说明')
-  assert.ok(paperText.includes('1.（本题3分）'), '题号后接本题分值')
+  assert.ok(paperText.includes('1．(本题3分)'), '题号后接本题分值')
   ok(`试卷 PDF ${paperPdf.pageCount} 页：页脚「第N页（共${paperPdf.pageCount}页）」逐页；抬头有全卷满分与班级座号小组姓名；大题说明与题号后分值都在`)
 
   const teacherDocx = await call.paper(sampleId, { ...student, answerPosition: 'end', format: 'docx' }, filesDir)

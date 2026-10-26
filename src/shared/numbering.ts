@@ -193,6 +193,16 @@ export function boxScoreLabel(item: PaperItem, section: DraftSection): string {
   return numberCountOf(item) === 1 ? `（${formatScore(score)} 分）` : itemScoreNote(item, section)
 }
 
+// 试卷正文里的写法：大题标题「（共10小题，每小题4分，共40分）」、题号后「(本题4分)」——照手排试卷与组卷网页面，数字两侧不留空格，
+// 题后的那条用半角括号贴着题号。答题卡沿用带空格的 sectionScoreNote / boxScoreLabel（照本地答题卡）。同一个算法的两种写法，数字都来自 structureOf
+export function paperSectionNote(section: SectionStructure): string {
+  return sectionScoreNote(section).replace(/ /g, '')
+}
+
+export function paperItemNote(item: PaperItem, section: DraftSection): string {
+  return itemScoreNote(item, section).replace(/ /g, '').replace(/^（/, '(').replace(/）$/, ')')
+}
+
 // 全卷满分说明：所有题号都设了分值才显示
 export function paperTotalNote(structure: PaperStructure): string {
   return structure.allScored && structure.totalScore != null ? `（全卷满分：${formatScore(structure.totalScore)}分）` : ''

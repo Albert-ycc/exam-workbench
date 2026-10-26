@@ -146,14 +146,14 @@ try {
     const m = o.sourcePosition === 'before-stem' ? `（${MATH}）` : ''
     const en = o.sourcePosition === 'before-stem' ? `（${ENGLISH}）` : ''
     for (const [no, lead, rest] of [[1, m, '下列说法正确的是'], [2, m, '如图'], [3, m, '计算：'], [4, m, '某超市']] as const) {
-      assert.ok(text.includes(`${no}.${lead}${rest}`), `${label} 第 ${no} 题开头应为「${no}.${lead}${rest}」`)
+      assert.ok(text.includes(`${no}．${lead}${rest}`), `${label} 第 ${no} 题开头应为「${no}．${lead}${rest}」`)
     }
     assert.ok(text.includes(`${en}Tomisanewstudent`), `${label} 完形填空没有块首题号，来源在最前`)
     assert.ok(text.includes('He5____fromCanada'), `${label} 完形填空第 5 空`)
     assert.ok(text.includes('likes6____'), `${label} 完形填空第 6 空`)
     assert.ok(text.includes('often7____'), `${label} 完形填空第 7 空`)
     for (const part of ['5.A.come', '6.A.sport', '7.A.play']) assert.ok(text.includes(part), `${label} 完形填空选项题号 ${part}`)
-    assert.ok(text.includes(`8.${en}假如你是李华`), `${label} 书面表达为第 8 题`)
+    assert.ok(text.includes(`8．${en}假如你是李华`), `${label} 书面表达为第 8 题`)
     assert.equal(count(text, '参考答案'), o.answerPosition === 'end' ? 1 : 0, `${label} 卷尾答案`)
     assert.equal(text.includes('【答案】C'), o.answerPosition !== 'none', `${label} 答案是否出现`)
     if (o.answerPosition === 'end') {
@@ -260,7 +260,7 @@ try {
   assert.equal(await call.preview(paperId, student), `${TITLE}_v2_学生版.pdf`, '草稿有改动时预览版本号加 1')
   const v2 = await call.exportPaper(paperId, student, filesDir)
   assert.deepEqual({ v: v2.versionNo, c: v2.createdVersion, p: basename(v2.filePath) }, { v: 2, c: true, p: `${TITLE}_v2_学生版.pdf` })
-  assert.ok(pdfText(v2.filePath).includes('3.计算：(−3)²'))
+  assert.ok(pdfText(v2.filePath).includes('3．计算：(−3)²'))
   const v2Again = await call.exportPaper(paperId, student, filesDir)
   assert.deepEqual({ v: v2Again.versionNo, c: v2Again.createdVersion }, { v: 2, c: false })
   const versions = await call.versions(paperId)

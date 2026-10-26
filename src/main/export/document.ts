@@ -2,7 +2,7 @@
 // 纯函数，不依赖 Electron，规则的单元测试都在 scripts/test-export.ts。
 import { ANSWER_SPACE_MM } from '../../shared/export.ts'
 import { editionOf, normalizeExportOptions, type DraftSection, type ExportOptions, type PaperSnapshot } from '../../shared/domain.ts'
-import { answerKeyLabel, fillQuestionNumbers, hasVisibleContent, itemScoreNote, numberItems, numberLabel, paperTotalNote, sectionHeading, sectionScoreNote, structureOf, type NumberedItem, type SectionStructure } from '../../shared/numbering.ts'
+import { answerKeyLabel, fillQuestionNumbers, hasVisibleContent, numberItems, numberLabel, paperItemNote, paperSectionNote, paperTotalNote, sectionHeading, structureOf, type NumberedItem, type SectionStructure } from '../../shared/numbering.ts'
 import { blockify, collectImages, el, hasRenderableContent, parseHtml, stripInvalidXmlChars, text, textContent, type ElementNode, type HNode } from './html-tree.ts'
 import { MAX_IMAGE_HEIGHT_PX, displaySize, parseImageSource } from './image-src.ts'
 
@@ -192,8 +192,11 @@ export function exportHeadings(sections: DraftSection[]): (string | null)[] {
 
 // 试卷里的大题标题说明：本大题至少有一题设了分值才写（旧试卷和没设分值的大题标题保持原样）
 function sectionNoteOf(section: SectionStructure): string {
-  return section.questionCount > section.unscoredNos.length ? sectionScoreNote(section) : ''
+  return section.questionCount > section.unscoredNos.length ? paperSectionNote(section) : ''
 }
+
+// 题号用全角句点「1．」，与组卷网页面和手排试卷一致；分值说明紧跟其后，不另加空格
+export const questionNoText = (no: number): string => `${no}．`
 
 export function buildExportDocument(snapshot: PaperSnapshot, rawOptions: ExportOptions): ExportDocument {
   const options = normalizeExportOptions(rawOptions)
@@ -220,11 +223,10 @@ export function buildExportDocument(snapshot: PaperSnapshot, rawOptions: ExportO
     body = normalizeWritingDivs(body, toLines)
     if (toLines) body = convertWritingRuns(body)
     const prefix: HNode[] = []
-    const scoreNote = itemScoreNote(n.item, section)
-    if (single) prefix.push(text(`${n.firstNo}.`))
+    const scoreNote = paperItemNote(n.item, section)
+    if (single) prefix.push(text(questionNoText(n.firstNo)))
     if (scoreNote) prefix.push(text(scoreNote))
     if (options.sourcePosition === 'before-stem' && sourceLabelOf(n)) prefix.push(el('span', { 'data-role': 'source' }, [text(`（${sourceLabelOf(n)}）`)]))
-    else if (single && !scoreNote) prefix.push(text(' '))
     if (prefix.length > 0) body = prependToFirstParagraph(body, prefix)
 
     let answer: HNode[] | null = null

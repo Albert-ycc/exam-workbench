@@ -1,6 +1,6 @@
 // 试卷结构与分值算法测试：npm run test:structure
 import assert from 'node:assert/strict'
-import { boxScoreLabel, formatScore, hasVisibleContent, itemScoreNote, MAX_NUMBER_COUNT, normalizeScore, numberItems, paperTotalNote, sectionScoreNote, structureOf } from '../src/shared/numbering.ts'
+import { boxScoreLabel, formatScore, hasVisibleContent, itemScoreNote, MAX_NUMBER_COUNT, normalizeScore, numberItems, paperItemNote, paperSectionNote, paperTotalNote, sectionScoreNote, structureOf } from '../src/shared/numbering.ts'
 import type { DraftSection, LibraryQuestion, PaperItem } from '../src/shared/domain.ts'
 import { appendQuestions } from '../src/shared/draft.ts'
 
@@ -61,6 +61,13 @@ check('单题分值标注与全卷满分', () => {
   assert.equal(itemScoreNote(sections[0].items[0], sections[0]), '（本题 4 分）')
   assert.equal(itemScoreNote(sections[1].items[0], sections[1]), '（每小题 1 分，共 15 分）')
   assert.equal(itemScoreNote(sections[2].items[2], sections[2]), '')
+  // 试卷正文的紧凑写法：数字两侧不留空格，题后的分值用半角括号；答题卡仍用带空格的写法
+  const s = structureOf(sections)
+  assert.equal(paperSectionNote(s.sections[0]), '（共3小题，每小题4分，共12分）')
+  assert.equal(paperSectionNote(s.sections[2]), '（共3小题）')
+  assert.equal(paperItemNote(sections[0].items[0], sections[0]), '(本题4分)')
+  assert.equal(paperItemNote(sections[1].items[0], sections[1]), '(每小题1分，共15分)')
+  assert.equal(paperItemNote(sections[2].items[2], sections[2]), '')
   assert.equal(paperTotalNote(structureOf(sections)), '', '有未设分值的题不写全卷满分')
   const full = structureOf(sections.slice(0, 2))
   assert.equal(paperTotalNote(full), '（全卷满分：27分）')

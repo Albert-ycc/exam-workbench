@@ -47,8 +47,9 @@ export const TEXT_WIDTH_TWIPS = PAGE.width - MARGIN.left - MARGIN.right
 const BODY_SIZE = 21 // 五号 10.5pt（半磅）
 const EM = BODY_SIZE * 10 // 一个汉字宽，twips
 const FONT_BODY = { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: 'Times New Roman', eastAsia: '宋体' }
-const FONT_HEAD = { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: 'Times New Roman', eastAsia: '黑体' }
-const LINE = 336 // 1.4 倍行距，行高约 1.6 个字高，与 PDF 的 line-height 一致
+const FONT_HEAD = { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: 'Times New Roman', eastAsia: '宋体' } // 标题与大题标题：宋体加粗，照手排试卷
+const LINE = 420 // 1.75 倍行距，行高约 2 个字高，与 PDF 题目正文的 line-height: 2 一致
+const OPTION_INDENT = Math.round(1.6 * EM) // 选项整体缩进一个半字，照手排试卷
 const PARA_AFTER = 60
 const ITEM_BEFORE = 100
 const ANSWER_INDENT = mmToTwips(3)
@@ -272,9 +273,9 @@ function optionsParagraphs(node: ElementNode, ctx: Ctx): Paragraph[] {
   }
   const filled = cells.filter((c) => c.length > 0)
   if (filled.length === 0) return label && label.length > 0 ? [paragraphOf(label, ctx)] : []
-  const base = ctx.indent?.left ?? 0
+  const base = (ctx.indent?.left ?? 0) + OPTION_INDENT
   const labelWidth = label && label.length > 0 ? Math.max(mmToTwips(9), Math.ceil(label.reduce((sum, p) => sum + pieceWidth(p, ctx), 0) * 1.06) + mmToTwips(2)) : 0
-  const avail = ctx.widthTwips - labelWidth
+  const avail = ctx.widthTwips - OPTION_INDENT - labelWidth
   const widths = filled.map((c) => c.reduce((sum, p) => sum + pieceWidth(p, ctx), 0) * 1.06)
   const gap = mmToTwips(4)
   let cols = Math.max(1, perRow)
@@ -290,7 +291,7 @@ function optionsParagraphs(node: ElementNode, ctx: Ctx): Paragraph[] {
       if (k > 0) pieces.push({ t: 'tab' })
       pieces.push(...cell)
     })
-    const indent = labelWidth > 0 ? { left: base + labelWidth, hanging: first ? labelWidth : undefined } : ctx.indent
+    const indent = labelWidth > 0 ? { left: base + labelWidth, hanging: first ? labelWidth : undefined } : { left: base }
     paragraphs.push(paragraphOf(pieces, { ...ctx, indent }, { tabStops: stops, keepNext: start + cols < filled.length }))
   }
   return paragraphs
@@ -445,14 +446,14 @@ function blocksToDocx(blocks: HNode[], ctx: Ctx): (Paragraph | Table)[] {
 
 const BASE_CTX = { maxWidthPx: TEXT_WIDTH_TWIPS / PX_TWIPS, widthTwips: TEXT_WIDTH_TWIPS }
 
-function headingParagraph(value: string, opts: { size: number; center?: boolean; before: number; after: number; pageBreak?: boolean; rule?: boolean }): Paragraph {
+function headingParagraph(value: string, opts: { size: number; center?: boolean; before: number; after: number; pageBreak?: boolean; rule?: boolean; letterSpacing?: number }): Paragraph {
   return new Paragraph({
     alignment: opts.center ? AlignmentType.CENTER : undefined,
     keepNext: true,
     pageBreakBefore: opts.pageBreak,
     spacing: { before: opts.before, after: opts.after, line: 300 },
     border: opts.rule ? { bottom: { style: BorderStyle.SINGLE, size: 6, space: 4, color: '000000' } } : undefined,
-    children: [new TextRun({ text: stripInvalidXmlChars(value), bold: true, size: opts.size, font: FONT_HEAD })]
+    children: [new TextRun({ text: stripInvalidXmlChars(value), bold: true, size: opts.size, font: FONT_HEAD, characterSpacing: opts.letterSpacing })]
   })
 }
 
@@ -526,7 +527,7 @@ function studentInfoParagraph(): Paragraph {
 }
 
 export function buildDocxDocument(doc: ExportDocument, images: ImageLookup, measure: TextMeasure = estimateTextWidth): Document {
-  const children: (Paragraph | Table)[] = [headingParagraph(doc.title, { size: 32, center: true, before: 0, after: 80 })]
+  const children: (Paragraph | Table)[] = [headingParagraph(doc.title, { size: 32, center: true, before: 0, after: 80, letterSpacing: 10 })] // 字距 0.5pt，与 PDF 一致
   if (doc.totalNote) children.push(totalNoteParagraph(doc.totalNote))
   children.push(studentInfoParagraph())
   const base: Ctx = { ...BASE_CTX, images, measure, imageSeq: { n: 0 } }

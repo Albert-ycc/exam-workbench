@@ -1,7 +1,7 @@
 {
   "name": "exam-workbench",
   "productName": "组卷工作台",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "组卷工作台：从组卷网入库试题、拖拽组卷、按配置导出 PDF / Word",
   "author": "Albert",
   "private": true,
