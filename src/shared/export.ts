@@ -85,6 +85,9 @@ export function formatQuestionNos(nos: number[]): string {
 
 // 作答区域：计算题、解答题题后留白的高度（毫米）。生成文件与下载弹窗的说明文字共用这一处
 export const ANSWER_SPACE_MM = { calc: 36, solve: 32 } as const
+// PDF 按页摊开作答空白时，其他题型的基础空白（毫米）：单题（选择、填空等）与多小题块；书面表达画横线不留白。
+// 每页剩下的高度再按各题基础空白的比例摊进去（export/paginate.ts）。Word 只给计算、解答题留固定高度
+export const PDF_FILL_MM = { single: 12, block: 6 } as const
 
 export const EXPORT_IPC = {
   getDefaults: 'export:get-defaults',

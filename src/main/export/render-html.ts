@@ -2,6 +2,7 @@
 // 版式：A4、页边距与页脚页码由 printToPDF 的参数给出，这里只管内容样式。
 import { ANSWER_KEY_TITLE, STUDENT_INFO_FIELDS, STUDENT_INFO_GAP_MM, WRITING_LINE_MM, keyLabelWidthMm, type ExportDocument } from './document.ts'
 import { escapeText, serializeNodes } from './html-tree.ts'
+import { CONTENT_WIDTH_MM } from './paginate.ts'
 
 // 正文五号（10.5pt）与组卷网页面的 14px 字号一致，公式图按原像素尺寸显示即与文字等高。
 // 版式照手排的单元测试卷：标题与大题标题用宋体加粗（西文与数字 Times），题目行距 2 倍，选项缩进一个半字
@@ -9,6 +10,7 @@ const CSS = `
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body {
   margin: 0;
+  width: ${CONTENT_WIDTH_MM}mm; /* 与打印的页内容同宽：隐藏窗口里量出的高度才与打印排版一致（paginate.ts） */
   color: #000;
   font-family: "Times New Roman", "SimSun", "宋体", "Songti SC", "STSong", serif;
   font-size: 10.5pt;
@@ -66,7 +68,8 @@ export function renderHtml(doc: ExportDocument): string {
     for (const item of section.items) {
       parts.push(`<div class="item${item.space ? ' has-space' : ''}" data-first-no="${item.firstNo}">${serializeNodes(item.body)}`)
       if (item.answer) parts.push(`<div class="item-answer">${serializeNodes(item.answer)}</div>`)
-      if (item.space) parts.push(`<div class="answer-space" data-kind="${item.space.kind}" style="height:${item.space.mm}mm"></div>`)
+      // 作答空白：高度是基础值，按页摊开时在隐藏窗口里再加（paginate.ts）
+      if (item.fill > 0) parts.push(`<div class="answer-space"${item.space ? ` data-kind="${item.space.kind}"` : ''} data-sp="${item.fill}" style="height:${item.fill}mm"></div>`)
       parts.push('</div>')
     }
     parts.push('</section>')

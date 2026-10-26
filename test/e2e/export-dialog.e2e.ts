@@ -202,7 +202,7 @@ try {
   await dialog.getByText('答案在题后时不留作答区域').waitFor()
   await radio('答案位置', '卷尾').check()
   await radio('作答区域', '留作答区域').check()
-  await dialog.getByText('计算题留白 36mm，解答题 32mm，书面表达画横线。').waitFor()
+  await dialog.getByText('每页剩下的空间按比例摊给各题的作答空白（计算题 36mm 起，解答题 32mm 起，其他题 12mm 起），页底不留白；书面表达画横线。').waitFor()
   await radio('试题来源', '题文前').check()
   await dialog.getByText('题文前：写在每道题的题干前，如「1.（2025·福建泉州·期中）下列…」。').waitFor()
   await radio('试题来源', '答案处').check()

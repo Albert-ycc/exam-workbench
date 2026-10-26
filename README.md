@@ -33,7 +33,7 @@ Windows 桌面应用：从组卷网入库试题，拖拽组卷，在应用内修
 | `src/main/library/` | 入库：拆题脚本 `extract-script.ts`（含知识点与难度）、图片下载、去重、入库任务；查询与各项题数 `queries.ts`；章节与知识点、难度写入 `classify.ts` |
 | `src/main/papers/` | 试卷、草稿、版本、下载记录的数据操作，试卷分类 `classify.ts`；草稿里题目 id、大题 id 必须唯一 |
 | `src/main/tags.ts` | 标签（题目标签与试卷标签各一套，共用实现） |
-| `src/main/export/` | 下载：内容规则 `document.ts`、PDF `pdf.ts`、Word `docx.ts`、答题卡 `card.ts` / `render-card-html.ts`（计算题把题干抄在框里）、下载前检查 `check.ts`、文件名 `file-name.ts`、下载流程 `service.ts` |
+| `src/main/export/` | 下载：内容规则 `document.ts`、PDF `pdf.ts`（勾「留作答区域」时先由 `paginate.ts` 在隐藏窗口里量高度、按页摊开作答空白再打印）、Word `docx.ts`、答题卡 `card.ts` / `render-card-html.ts`（计算题把题干抄在框里）、下载前检查 `check.ts`、文件名 `file-name.ts`、下载流程 `service.ts` |
 | `src/renderer/src/pages/` | 采集、试题库、试卷库、编辑器、设置五个页面 |
 | `src/renderer/src/components/ui/` | 界面底座：方向 C 色板下的按钮、表单、弹窗、抽屉、提示条、红笔记号等通用组件；`format.ts` 是界面共用的时间格式、文件名、错误文案整理 |
 | `src/renderer/src/components/classify/` | 归类共用组件：章节 / 难度 / 知识点 / 标签筛选块、打标签小框、管理标签弹窗 |

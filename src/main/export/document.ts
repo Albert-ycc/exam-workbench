@@ -1,6 +1,6 @@
 // 下载内容的生成规则：从版本快照 + 下载配置得到「整卷」的中间结构，PDF 与 Word 两个输出共用。
 // 纯函数，不依赖 Electron，规则的单元测试都在 scripts/test-export.ts。
-import { ANSWER_SPACE_MM } from '../../shared/export.ts'
+import { ANSWER_SPACE_MM, PDF_FILL_MM } from '../../shared/export.ts'
 import { editionOf, normalizeExportOptions, type DraftSection, type ExportOptions, type PaperSnapshot } from '../../shared/domain.ts'
 import { answerKeyLabel, fillQuestionNumbers, hasVisibleContent, numberItems, numberLabel, paperItemNote, paperSectionNote, paperTotalNote, sectionHeading, structureOf, type NumberedItem, type SectionStructure } from '../../shared/numbering.ts'
 import { blockify, collectImages, el, hasRenderableContent, parseHtml, stripInvalidXmlChars, text, textContent, type ElementNode, type HNode } from './html-tree.ts'
@@ -48,7 +48,8 @@ export interface ExportItem {
   lastNo: number
   body: HNode[] // 题干（块级节点），题号与「题文前」来源已并入第一段
   answer: HNode[] | null // 答案位置为「题后」时的答案
-  space: AnswerSpace | null
+  space: AnswerSpace | null // Word 的固定留白（计算、解答题）
+  fill: number // PDF 按页摊开时这道题的基础作答空白（毫米），0 为不参与；Word 不用它
 }
 
 export interface ExportSection {
@@ -246,7 +247,8 @@ export function buildExportDocument(snapshot: PaperSnapshot, rawOptions: ExportO
       lastNo: n.lastNo,
       body,
       answer: options.answerPosition === 'after' ? answer : null,
-      space: options.answerArea && (kind === 'calc' || kind === 'solve') ? { kind, mm: ANSWER_SPACE_MM[kind] } : null
+      space: options.answerArea && (kind === 'calc' || kind === 'solve') ? { kind, mm: ANSWER_SPACE_MM[kind] } : null,
+      fill: !options.answerArea ? 0 : kind === 'calc' || kind === 'solve' ? ANSWER_SPACE_MM[kind] : kind === 'writing' ? 0 : single ? PDF_FILL_MM.single : PDF_FILL_MM.block
     })
   }
 

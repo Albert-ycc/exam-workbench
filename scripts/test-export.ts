@@ -16,6 +16,7 @@ import { parseHtml, serializeNodes, textContent, walk, type ElementNode, type HN
 import { MAX_IMAGE_HEIGHT_PX, displaySize, parseImageSource, rasterSize, svgHasIntrinsicSize } from '../src/main/export/image-src.ts'
 import { renderCardHtml } from '../src/main/export/render-card-html.ts'
 import { renderHtml } from '../src/main/export/render-html.ts'
+import { CONTENT_HEIGHT_MM, FILL, fillScript, planPages } from '../src/main/export/paginate.ts'
 import { createExportService, type Renderers } from '../src/main/export/service.ts'
 import { parseOptions, readExportDefaults, writeExportDefaults } from '../src/main/export/settings.ts'
 import { createPaper, getPaper, getVersion, listVersions, saveDraft } from '../src/main/papers/repo.ts'
@@ -194,6 +195,12 @@ try {
       const spaces = items.map((i) => (i.space ? `${i.space.kind}:${i.space.mm}` : null))
       assert.deepEqual(spaces, o.answerArea ? [null, null, 'calc:36', 'solve:32', null, null] : [null, null, null, null, null, null])
       if (o.answerPosition === 'after') assert.equal(doc.options.answerArea, false)
+      // PDF 按页摊开的基础空白：单题 12、计算 36、解答 32、多小题块 6、书面表达 0；没勾时全 0，页面里就没有空白块
+      assert.deepEqual(items.map((i) => i.fill), o.answerArea ? [12, 12, 36, 32, 6, 0] : [0, 0, 0, 0, 0, 0])
+      if (o.answerArea) {
+        assert.match(html, /<div class="answer-space" data-kind="calc" data-sp="36" style="height:36mm"><\/div>/)
+        assert.match(html, /<div class="answer-space" data-sp="12" style="height:12mm"><\/div>/)
+      } else assert.doesNotMatch(html, /data-sp=/)
 
       // 书面表达：作答区域打开时长下划线转成横线行（每行 8mm），否则保持原样
       const lines = findAll(items[5].body, (n) => n.attrs['data-role'] === 'writing-lines')
@@ -819,6 +826,39 @@ try {
   })
 
   // 第二轮：答题卡、抬头与分值、Word 页脚与测宽、下载前自检。检查函数共用，通过项计入总数
+  check('PDF 按页摊开（planPages）：整段不跨页，余量按基础空白比例摊、单题封顶 1.6 倍、超过一页的段独占', () => {
+    const cap = 100
+    const round = (xs: number[]): number[] => xs.map((x) => +x.toFixed(2))
+    // 都放得下：余量 40 按基础空白 10:30 摊，谁都没到上限，页底不剩
+    let plan = planPages([{ height: 20, sp: 10 }, { height: 40, sp: 30 }], cap, 1.6, 6)
+    assert.deepEqual(plan.breakBefore, [])
+    assert.equal(plan.pages.length, 1)
+    assert.deepEqual(round(plan.extra), [10, 30])
+    assert.equal(+plan.pages[0].spare.toFixed(2), 0)
+    // 两题都到上限（各加 1.6 倍）：余下的留在页底
+    plan = planPages([{ height: 10, sp: 10 }, { height: 10, sp: 30 }], cap, 1.6, 6)
+    assert.deepEqual(round(plan.extra), [16, 48])
+    assert.equal(+plan.pages[0].spare.toFixed(2), 16)
+    // 放不下就另起一页，前一页先摊完：第 3 段起新页，第 2 段没有空白不参与
+    plan = planPages([{ height: 50, sp: 10 }, { height: 40, sp: 0 }, { height: 30, sp: 10 }], cap, 1.6, 6)
+    assert.deepEqual(plan.breakBefore, [2])
+    assert.deepEqual(plan.pages.map((p) => [p.start, p.end]), [[0, 2], [2, 3]])
+    assert.deepEqual(round(plan.extra), [10, 0, 16])
+    // 比一页还高的段：独占一页、不摊余量，它前后都强制分页
+    plan = planPages([{ height: 30, sp: 10 }, { height: 150, sp: 10 }, { height: 20, sp: 10 }], cap, 1.6, 6)
+    assert.deepEqual(plan.breakBefore, [1, 2])
+    assert.deepEqual(plan.pages.map((p) => p.oversized), [false, true, false])
+    assert.deepEqual(round(plan.extra), [16, 0, 16])
+    // 没有空白的卷子：只分页，不摊
+    plan = planPages([{ height: 60, sp: 0 }, { height: 60, sp: 0 }], cap, 1.6, 6)
+    assert.deepEqual(plan.breakBefore, [1])
+    assert.deepEqual(plan.extra, [0, 0])
+    // 注入页面的脚本带着 planPages 的源码与页面参数
+    const script = fillScript()
+    assert.match(script, /getBoundingClientRect/)
+    assert.match(script, new RegExp(`"capMm":${CONTENT_HEIGHT_MM - FILL.safetyMm}`))
+  })
+
   await runRound2Tests({ check, db, dataDir, root })
 
   db.close()

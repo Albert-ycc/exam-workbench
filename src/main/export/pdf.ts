@@ -3,6 +3,7 @@
 import { app, BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fillScript, PAPER_PAGE, type FillReport } from './paginate.ts'
 
 const MM = 1 / 25.4 // 毫米 → 英寸（printToPDF 的页边距单位）
 const TIMEOUT_MS = 120_000
@@ -10,8 +11,8 @@ const TIMEOUT_MS = 120_000
 // 页脚「第1页（共8页）」，与 Word 的页脚一致（docx.ts 的 footers）
 const FOOTER = `<div style="width:100%;text-align:center;font-size:9px;color:#444;font-family:'Times New Roman',serif;">第<span class="pageNumber"></span>页（共<span class="totalPages"></span>页）</div>`
 
-// 在隐藏窗口里加载 HTML，图片都加载完才交给 print；坏图直接报错而不是印出一个空框
-async function withPrintWindow(html: string, print: (win: BrowserWindow) => Promise<Buffer>): Promise<Buffer> {
+// 在隐藏窗口里加载 HTML，图片都加载完才交给 print；坏图直接报错而不是印出一个空框。prepare 在打印前改页面（按页摊开作答空白）
+async function withPrintWindow(html: string, print: (win: BrowserWindow) => Promise<Buffer>, prepare?: (win: BrowserWindow) => Promise<void>): Promise<Buffer> {
   const dir = mkdtempSync(join(app.getPath('temp'), 'ewb-pdf-'))
   const win = new BrowserWindow({
     show: false,
@@ -32,6 +33,7 @@ async function withPrintWindow(html: string, print: (win: BrowserWindow) => Prom
         `Array.from(document.images).filter((i) => !i.complete || (i.naturalWidth === 0 && !/\\.svg$/i.test(i.src))).map((i) => i.src + ' complete=' + i.complete + ' w=' + i.naturalWidth)`
       )) as string[]
       if (broken.length > 0) throw new Error(`有 ${broken.length} 张图片没能加载，无法生成 PDF：${broken.join('；')}`)
+      if (prepare) await prepare(win)
       return print(win)
     })()
     const timeout = new Promise<never>((_, reject) => {
@@ -50,17 +52,24 @@ async function withPrintWindow(html: string, print: (win: BrowserWindow) => Prom
   }
 }
 
-// 试卷：页边距与页脚由打印参数给出
+// 试卷：页边距与页脚由打印参数给出；勾了「留作答区域」的卷子先按页摊开作答空白（paginate.ts），再打印
 export function renderPdf(html: string): Promise<Buffer> {
-  return withPrintWindow(html, (win) =>
-    win.webContents.printToPDF({
-      pageSize: 'A4',
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: '<span></span>',
-      footerTemplate: FOOTER,
-      margins: { top: 20 * MM, bottom: 20 * MM, left: 18 * MM, right: 18 * MM }
-    })
+  return withPrintWindow(
+    html,
+    (win) =>
+      win.webContents.printToPDF({
+        pageSize: 'A4',
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: '<span></span>',
+        footerTemplate: FOOTER,
+        margins: { top: PAPER_PAGE.marginTopMm * MM, bottom: PAPER_PAGE.marginBottomMm * MM, left: PAPER_PAGE.marginXMm * MM, right: PAPER_PAGE.marginXMm * MM }
+      }),
+    async (win) => {
+      await win.webContents.executeJavaScript('document.fonts.ready.then(() => true)')
+      const report = (await win.webContents.executeJavaScript(fillScript())) as FillReport | null
+      if (report) console.log(`[pdf] 按页摊开作答空白：${report.pages} 页，各页余量 ${report.spareMm.join('/')}mm${report.oversized ? `，${report.oversized} 段超过一页交给 Chromium 拆页` : ''}`)
+    }
   )
 }
 

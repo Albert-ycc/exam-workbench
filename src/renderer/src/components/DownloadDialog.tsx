@@ -4,7 +4,7 @@
 // 下载完成后选项保持可改，主按钮变成「再下载一份」。底层仍是 ExportOptions。
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { normalizeExportOptions, type ExportFormat, type ExportKind, type ExportOptions, type SourcePosition } from '@shared/domain'
-import { ANSWER_SPACE_MM, type ExportCheck, type ExportIssue, type ExportIssueType, type ExportResult } from '@shared/export'
+import { ANSWER_SPACE_MM, PDF_FILL_MM, type ExportCheck, type ExportIssue, type ExportIssueType, type ExportResult } from '@shared/export'
 import { IconFolder } from '../icons'
 import { Button, Checkbox, Modal, Segmented, Tag, errorMessage } from './ui'
 import './DownloadDialog.css'
@@ -426,7 +426,9 @@ export default function DownloadDialog({ paperId, open, initialKind = 'paper', o
                 teacherAfter
                   ? `答案在题后时不留作答区域${both ? '（学生版仍按所选留白）' : ''}。`
                   : areaShown
-                    ? `计算题留白 ${ANSWER_SPACE_MM.calc}mm，解答题 ${ANSWER_SPACE_MM.solve}mm，书面表达画横线。`
+                    ? form.format === 'pdf'
+                      ? `每页剩下的空间按比例摊给各题的作答空白（计算题 ${ANSWER_SPACE_MM.calc}mm 起，解答题 ${ANSWER_SPACE_MM.solve}mm 起，其他题 ${PDF_FILL_MM.single}mm 起），页底不留白；书面表达画横线。`
+                      : `计算题留白 ${ANSWER_SPACE_MM.calc}mm，解答题 ${ANSWER_SPACE_MM.solve}mm，书面表达画横线。`
                     : '不留白，题目连续排版。'
               }
             >
