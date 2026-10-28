@@ -4,10 +4,10 @@
 // 真实数据只读使用：会先复制到临时目录再打开，不改原件。教师版需要答案，而这批真题没有答案，所以给少数几题补示意答案，只用来看答案的版式。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
+import { makeTempDir } from '../../scripts/temp-dir.ts'
 import { checkBoxEdges, checkMarks } from '../../scripts/test-export-card-checks.ts'
 import { buildCardDocument } from '../../src/main/export/card.ts'
 import type { DraftSection, ExportOptions, LibraryQuestion, PaperDraft } from '../../src/shared/domain.ts'
@@ -23,7 +23,7 @@ for (const d of [filesDir, convDir, imagesDir]) mkdirSync(d, { recursive: true }
 const sh = (cmd: string, args: string[]): string => execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
 
 buildTo('out-export3')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-real3-data-'))
+const dataDir = makeTempDir('ewb-real3-data-')
 cpSync(real, dataDir, { recursive: true })
 const { app, window } = await launchApp({ outDir: 'out-export3', dataDir, online: true })
 

@@ -4,16 +4,14 @@
 //                    另外覆盖验证页暂停与取消、答案图片、无效链接
 //   --online：真实打开组卷网的试卷页与单题页，共 4 次页面加载（入库 2 次、再入一次 2 次）
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
+import { evidenceDir } from '../../scripts/temp-dir.ts'
 import { installIntercept, PAPER_URL, QUESTION_URL, VERIFY_FOREVER_URL, VERIFY_URL } from './library-intercept.e2e.ts'
 
 const mode = process.argv.includes('--online') || process.env.EWB_LIBRARY_ONLINE === '1' ? 'online' : 'offline'
-const evidence = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? mkdtempSync(join(tmpdir(), 'ewb-library-e2e-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv.slice(2).find((a) => !a.startsWith('--')), 'ewb-library-e2e-')
 if (mode === 'offline') {
   skipWithoutFixtures('入库与试题库端到端（离线模式）')
   process.env.EWB_IMPORT_GAP_MS = '300'

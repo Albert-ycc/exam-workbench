@@ -3,7 +3,6 @@
 // 版本历史停靠、下载弹窗里点题号定位、自动滚动限速、拖动浮标文案、短题不显示「展开」、空库「去采集」。
 // 用法：node test/e2e/editor-ops.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
@@ -11,9 +10,8 @@ import { seedDataDir } from '../../scripts/seed-dev.ts'
 import { openDatabase } from '../../src/main/db.ts'
 import { addCustomSection, call, center, dragBetween, inDeskView, itemNos, itemOf, makeItem, makeTempDirs, openEditor, saved, sectionAt, sectionNames, seedPaper, structureDraft, watchErrors } from './editor-support.e2e.ts'
 
-const dirs = makeTempDirs('ops')
-const evidence = process.argv[2] ?? dirs.evidence
-mkdirSync(evidence, { recursive: true })
+const dirs = makeTempDirs('ops', process.argv[2])
+const evidence = dirs.evidence
 const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: join(evidence, `${name}.png`) })
 
 let passed = 0

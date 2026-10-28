@@ -5,16 +5,15 @@
 //    Select 长文字不撑宽、NumberInput 清空与步长、Drawer 停靠不盖主内容、usePersistentState 持久化与容错
 // 用法：node test/e2e/ui-kit.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import react from '@vitejs/plugin-react'
 import type { Locator, Page } from 'playwright'
 import { build } from 'vite'
 import { buildTo, launchApp, ROOT } from '../../scripts/e2e/app.ts'
+import { evidenceDir } from '../../scripts/temp-dir.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-ui-kit-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-ui-kit-')
 
 // ---------- 样张页 ----------
 const harness = join(ROOT, 'node_modules/.cache/ewb-ui-harness')

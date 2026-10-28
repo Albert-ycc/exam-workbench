@@ -1,14 +1,14 @@
 // 编辑器自动保存用到的数据操作：标题与草稿同事务写入，任何一项不合法都不留下半截改动（只需 node，不启动界面）
 // 用法：node test/e2e/editor-repo.e2e.ts
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { build } from 'esbuild'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { makeTempDir } from '../../scripts/temp-dir.ts'
 import { openDatabase } from '../../src/main/db.ts'
 import { createPaper, createVersion, duplicatePaper, getPaper, listPapers, renamePaper, saveEdits } from '../../src/main/papers/repo.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'ewb-editor-repo-'))
+const dir = makeTempDir('ewb-editor-repo-')
 let passed = 0
 function check(name: string, fn: () => void): void {
   fn()

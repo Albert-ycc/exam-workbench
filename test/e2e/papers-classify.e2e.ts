@@ -7,16 +7,14 @@
 //   P6 新建分类的常用名下拉（已有的不再列）
 // 用法：node test/e2e/papers-classify.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Locator, Page } from 'playwright'
 import { CATEGORY_PRESETS } from '../../src/shared/classify.ts'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-papers-classify-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-papers-classify-')
 buildTo('out-papers3')
 
 let steps = 0
@@ -38,7 +36,7 @@ const resize = async (app: ElectronApplication, window: Page, width: number, hei
 const shot = (window: Page, name: string) => window.screenshot({ path: join(evidence, `${name}.png`) })
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-papers-classify-data-'))
+const dataDir = makeTempDir('ewb-papers-classify-data-')
 seedDataDir(dataDir)
 const { app, window } = await launchApp({ outDir: 'out-papers3', dataDir })
 

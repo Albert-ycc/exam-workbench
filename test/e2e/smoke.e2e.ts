@@ -1,16 +1,14 @@
 // 冒烟测试：应用能启动、四个导航页能切换、试题库能读到样例题、图片协议可用
 // 用法：node test/e2e/smoke.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-smoke-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-smoke-')
 buildTo('out-smoke')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-smoke-data-'))
+const dataDir = makeTempDir('ewb-smoke-data-')
 seedDataDir(dataDir)
 const { app, window } = await launchApp({ outDir: 'out-smoke', dataDir })
 try {

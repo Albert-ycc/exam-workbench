@@ -9,18 +9,17 @@
 // （「七年级数学英语综合测试」21 题含 15 空完形填空、「隔离A」「隔离B」）；入库部分同样用本地样本页代替组卷网，不访问外网。
 // 用法：node test/e2e/pages.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
 import { compareTypeNames, primaryQuestionType } from '../../src/shared/library.ts'
 import { numberItems, numberLabel } from '../../src/shared/numbering.ts'
 import { buildTo, launchApp, ROOT } from '../../scripts/e2e/app.ts'
 import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { ENGLISH_URL, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-pages-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-pages-')
 // 各套端到端各用自己的构建目录；本套用 out-pages5，与其余各套的构建目录互不重叠
 const OUT = 'out-pages5'
 process.env.EWB_IMPORT_GAP_MS = '300' // 入库的页间间隔缩短，测试不必干等
@@ -597,7 +596,7 @@ try {
 
   const defaults = await window.evaluate(() => window.workbench.exporter.getDefaults())
   await window.getByTestId('download-dir').filter({ hasText: defaults.directory }).waitFor()
-  const picked = mkdtempSync(join(tmpdir(), 'ewb-pages-download-'))
+  const picked = makeTempDir('ewb-pages-download-')
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
   }, picked)

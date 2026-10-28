@@ -2,13 +2,13 @@
 // 验证「原题只读」「版本只增不改、连续编号、不能单独删除」「删除试卷连带删除版本与下载记录」，
 // 并在拆掉触发器后确认同样的操作会成功，证明这些断言确实依赖触发器。
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { DB_FILE, migrateTo, openDatabase, SCHEMA_VERSION } from '../src/main/db.ts'
+import { makeTempDir } from './temp-dir.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'ewb-db-'))
+const dir = makeTempDir('ewb-db-')
 const now = new Date().toISOString()
 let passed = 0
 function check(name: string, fn: () => void): void {
@@ -103,7 +103,7 @@ try {
   })
 
   check('旧库升级：0.3.0 结构（前三次迁移）的库打开后升到最新，数据一条不少，触发器仍在，新表建出', () => {
-    const old = mkdtempSync(join(tmpdir(), 'ewb-db-old-'))
+    const old = makeTempDir('ewb-db-old-')
     try {
       const raw = new DatabaseSync(join(old, DB_FILE))
       raw.exec('PRAGMA foreign_keys = ON;')

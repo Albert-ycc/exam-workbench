@@ -1,9 +1,7 @@
 // 归类测试：npm run test:classify
 // 试题库的章节、知识点、难度、标签（筛选、各项题数、批量操作、入库补齐），试卷库的分类与标签（不进版本、不动修改时间、另存时复制）。
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { checkClassName, classNameLength, cleanClassName, difficultyTier, DIFFICULTY_TIERS, NO_CHAPTER, normalizeClassName, TAG_NAME_MAX } from '../src/shared/classify.ts'
 import { openDatabase } from '../src/main/db.ts'
 import { assignChapter, createChapter, deleteChapter, listChapters, moveChapter, renameChapter, sanitizeMeta, saveQuestionMeta } from '../src/main/library/classify.ts'
@@ -12,8 +10,9 @@ import { deleteQuestion, getQuestion, libraryFacets, listQuestionIds, listQuesti
 import { createCategory, deleteCategory, listCategories, moveCategory, renameCategory, setCategory } from '../src/main/papers/classify.ts'
 import { createPaper, createVersion, deletePaper, duplicatePaper, getPaper, listPapers, saveDraft } from '../src/main/papers/repo.ts'
 import { changeTags, createTag, deleteTag, listTags, renameTag } from '../src/main/tags.ts'
+import { makeTempDir } from './temp-dir.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'ewb-classify-'))
+const dir = makeTempDir('ewb-classify-')
 let passed = 0
 function check(name: string, fn: () => void): void {
   fn()
@@ -270,7 +269,7 @@ try {
   })
 
   check('随机条件组合：筛选、分页、各项题数与朴素的逐题过滤实现完全一致（含关键词）', () => {
-    const dir2 = mkdtempSync(join(tmpdir(), 'ewb-classify-rand-'))
+    const dir2 = makeTempDir('ewb-classify-rand-')
     const rdb = openDatabase(dir2)
     try {
       let seed = 20261026

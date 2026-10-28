@@ -1,18 +1,17 @@
 // editor-*.e2e.ts 共用的测试素材与操作（本文件自己不是测试，只导出函数）
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import type { Locator, Page } from 'playwright'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import type { DraftSection, PaperDraft, PaperItem } from '../../src/shared/domain.ts'
 
 export type WB = Window['workbench']
 export const call = <T>(page: Page, fn: (wb: WB) => Promise<T>): Promise<T> => page.evaluate(`(${fn.toString()})(window.workbench)`) as Promise<T>
 
-export function makeTempDirs(tag: string): { dataDir: string; userDataDir: string; evidence: string } {
+// given 是命令行指定的证据目录，没给才用临时目录
+export function makeTempDirs(tag: string, given: string | undefined): { dataDir: string; userDataDir: string; evidence: string } {
   return {
-    dataDir: mkdtempSync(join(tmpdir(), `ewb-${tag}-data-`)),
-    userDataDir: mkdtempSync(join(tmpdir(), `ewb-${tag}-user-`)),
-    evidence: mkdtempSync(join(tmpdir(), `ewb-${tag}-shots-`))
+    dataDir: makeTempDir(`ewb-${tag}-data-`),
+    userDataDir: makeTempDir(`ewb-${tag}-user-`),
+    evidence: evidenceDir(given, `ewb-${tag}-shots-`)
   }
 }
 

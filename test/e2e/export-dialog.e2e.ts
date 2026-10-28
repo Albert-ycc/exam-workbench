@@ -5,18 +5,17 @@
 // 用法：node test/e2e/export-dialog.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { build } from 'vite'
 import { buildTo, launchApp, ROOT } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { fixSeedPng, sampleDraft } from '../../scripts/test-export-fixtures.ts'
 import type { ExportResult } from '../../src/shared/export.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-dialog-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-export-dialog-')
 for (const f of readdirSync(evidence).filter((n) => /-\d+x\d+\.png$/.test(n))) rmSync(join(evidence, f))
 
 // ---------- 测试页：只含 DownloadDialog，样式与应用一致 ----------
@@ -66,12 +65,12 @@ await build({
 })
 
 buildTo('out-export3')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-dialog-data-'))
+const dataDir = makeTempDir('ewb-dialog-data-')
 seedDataDir(dataDir)
 fixSeedPng(dataDir)
-const userDataDir = mkdtempSync(join(tmpdir(), 'ewb-dialog-user-'))
-const saveDir = mkdtempSync(join(tmpdir(), 'ewb-dialog-save-')) // 首次默认保存位置
-const otherDir = mkdtempSync(join(tmpdir(), 'ewb-dialog-other-'))
+const userDataDir = makeTempDir('ewb-dialog-user-')
+const saveDir = makeTempDir('ewb-dialog-save-') // 首次默认保存位置
+const otherDir = makeTempDir('ewb-dialog-other-')
 // 默认保存位置是系统「下载」文件夹；测试里用设置文件指向临时文件夹，不往真实下载文件夹写东西
 const STUDENT = { answerPosition: 'none', sourcePosition: 'none', format: 'pdf', answerArea: false }
 const settingsFile = join(userDataDir, 'export-settings.json')
@@ -385,7 +384,7 @@ try {
   // ---------- 八、出错与键盘 ----------
   await open(paperA)
   await window.waitForFunction(() => !!document.querySelector('.dl-name-text'))
-  const gone = mkdtempSync(join(tmpdir(), 'ewb-dialog-gone-'))
+  const gone = makeTempDir('ewb-dialog-gone-')
   await app.evaluate((_e, dir) => ((globalThis as unknown as { __pick: string }).__pick = dir), gone)
   await dialog.getByRole('button', { name: '更改…' }).click()
   await window.waitForFunction((p) => document.querySelector('.dl-path-text')?.textContent === p, gone)

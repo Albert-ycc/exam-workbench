@@ -11,9 +11,8 @@ import { openDatabase } from '../../src/main/db.ts'
 import { recordExport } from '../../src/main/papers/repo.ts'
 import { center, dragBetween, itemNos, itemOf, makeItem, makeTempDirs, openEditor, saved, sectionAt, seedPaper, structureDraft, watchErrors } from './editor-support.e2e.ts'
 
-const dirs = makeTempDirs('review')
-const evidence = process.argv[2] ?? dirs.evidence
-mkdirSync(evidence, { recursive: true })
+const dirs = makeTempDirs('review', process.argv[2])
+const evidence = dirs.evidence
 const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: join(evidence, `${name}.png`) })
 
 let passed = 0

@@ -1,11 +1,11 @@
 // 端到端测试工具：构建到独立目录，用 Playwright 启动应用（独立的用户目录与数据目录，互不干扰）。
 // 各开发线的测试脚本放在 test/e2e/<名称>.e2e.ts，用 node 直接运行。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
+import { makeTempDir } from '../temp-dir.ts'
 
 export const ROOT = resolve(import.meta.dirname, '../..')
 
@@ -104,10 +104,8 @@ export interface LaunchOptions {
 }
 
 export async function launchApp(options: LaunchOptions): Promise<LaunchedApp> {
-  const userDataDir = options.userDataDir ?? mkdtempSync(join(tmpdir(), 'ewb-e2e-user-'))
-  const dataDir = options.dataDir ?? mkdtempSync(join(tmpdir(), 'ewb-e2e-data-'))
-  if (!options.userDataDir) process.on('exit', () => rmSync(userDataDir, { recursive: true, force: true }))
-  if (!options.dataDir) process.on('exit', () => rmSync(dataDir, { recursive: true, force: true }))
+  const userDataDir = options.userDataDir ?? makeTempDir('ewb-e2e-user-')
+  const dataDir = options.dataDir ?? makeTempDir('ewb-e2e-data-')
   mkdirSync(userDataDir, { recursive: true })
   writeFileSync(join(userDataDir, 'config.json'), JSON.stringify({ dataDir }))
   const executablePath = createRequire(import.meta.url)('electron') as unknown as string
@@ -119,6 +117,9 @@ export async function launchApp(options: LaunchOptions): Promise<LaunchedApp> {
     args: options.online ? [entry] : ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1', entry],
     env: { ...process.env, EWB_USER_DATA: userDataDir, EWB_E2E: '1' }
   })
+  // 应用导出 PDF 时在系统临时目录建 ewb-pdf-*，进程被杀就留下了；改到本次测试的临时目录里，退出时一起删。
+  // macOS 上 app.getPath('temp') 不认 TMPDIR 环境变量，只能启动后改
+  await app.evaluate(({ app: electronApp }, dir) => electronApp.setPath('temp', dir), makeTempDir('ewb-e2e-temp-'))
   const window = await app.firstWindow()
   await window.waitForLoadState('domcontentloaded')
   return { app, window, dataDir, userDataDir }

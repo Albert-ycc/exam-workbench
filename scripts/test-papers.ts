@@ -1,8 +1,6 @@
 // 试卷与版本逻辑测试：npm run test:papers
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { rmSync } from 'node:fs'
 import { openDatabase } from '../src/main/db.ts'
 import { createCategory, setCategory } from '../src/main/papers/classify.ts'
 import { changeTags, createTag } from '../src/main/tags.ts'
@@ -21,8 +19,9 @@ import {
   restoreVersion,
   saveDraft
 } from '../src/main/papers/repo.ts'
+import { makeTempDir } from './temp-dir.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'ewb-papers-'))
+const dir = makeTempDir('ewb-papers-')
 let passed = 0
 function check(name: string, fn: () => void): void {
   fn()

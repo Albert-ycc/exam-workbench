@@ -4,16 +4,16 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { allValidOptions, fixSeedPng, optionsLabel, sampleDraft } from '../../scripts/test-export-fixtures.ts'
 import { normalizeExportOptions, type ExportOptions, type PaperDraft } from '../../src/shared/domain.ts'
 import { configWords, withWords } from '../../src/main/export/file-name.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-'))
+const evidence = evidenceDir(process.argv[2], 'ewb-export-')
 const filesDir = join(evidence, 'files')
 const imagesDir = join(evidence, 'images')
 // 证据目录里本测试自己的子目录每次重新生成
@@ -75,7 +75,7 @@ const ok = (name: string): void => {
 }
 
 buildTo('out-export3')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-export-data-'))
+const dataDir = makeTempDir('ewb-export-data-')
 seedDataDir(dataDir)
 fixSeedPng(dataDir)
 const launched = await launchApp({ outDir: 'out-export3', dataDir })

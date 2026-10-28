@@ -6,16 +6,14 @@
 // 全程不访问外网：内置浏览器会话的 https 请求由本地桩页面应答，首次启动进采集的那一次用 DNS 屏蔽。
 // 用法：node test/e2e/ui-shell.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ElectronApplication, Page } from 'playwright'
 import { buildTo, launchApp, type LaunchedApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { sampleDraft } from '../../scripts/test-export-fixtures.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-ui-shell-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-ui-shell-')
 buildTo('out-uibase')
 
 const launch = (dataDir: string, userDataDir: string): Promise<LaunchedApp> => launchApp({ outDir: 'out-uibase', dataDir, userDataDir })
@@ -44,8 +42,8 @@ const onEditor = (window: Page) => window.getByLabel('试卷标题')
 const storedPage = (window: Page): Promise<string | null> => window.evaluate(() => localStorage.getItem('ewb.ui.page'))
 
 // ---------- S10：从没用过 ----------
-const emptyData = mkdtempSync(join(tmpdir(), 'ewb-shell-empty-'))
-const emptyUser = mkdtempSync(join(tmpdir(), 'ewb-shell-empty-user-'))
+const emptyData = makeTempDir('ewb-shell-empty-')
+const emptyUser = makeTempDir('ewb-shell-empty-user-')
 let session = await launch(emptyData, emptyUser)
 try {
   const { app, window } = session
@@ -68,8 +66,8 @@ try {
 }
 
 // ---------- 有题库的数据 ----------
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-shell-data-'))
-const userDataDir = mkdtempSync(join(tmpdir(), 'ewb-shell-user-'))
+const dataDir = makeTempDir('ewb-shell-data-')
+const userDataDir = makeTempDir('ewb-shell-user-')
 seedDataDir(dataDir)
 session = await launch(dataDir, userDataDir)
 try {

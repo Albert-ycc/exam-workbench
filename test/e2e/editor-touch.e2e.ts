@@ -1,16 +1,14 @@
 // 触屏操作：手指在试题库卡片上滑动要能滚动左栏，按住一会儿再移动才是拖拽；只有拖动手柄禁用浏览器的触摸滚动
 // 用 CDP 的 Input.dispatchTouchEvent 注入真实触摸事件。用法：node test/e2e/editor-touch.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-editor-touch-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-editor-touch-')
 buildTo('out-editor4')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-editor-touch-data-'))
+const dataDir = makeTempDir('ewb-editor-touch-data-')
 const { questionIds } = seedDataDir(dataDir)
 const { app, window: page } = await launchApp({ outDir: 'out-editor4', dataDir })
 

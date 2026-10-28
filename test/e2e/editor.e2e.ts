@@ -1,18 +1,17 @@
 // 组卷编辑器与版本管理端到端测试：拖拽组卷、题号重排、副本编辑与隔离、重启后草稿、存版本 / 恢复 / 预览 / 下载记录
 // 用法：node test/e2e/editor.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deflateSync } from 'node:zlib'
 import type { Locator, Page } from 'playwright'
 import { buildTo, launchApp, type LaunchedApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { openDatabase } from '../../src/main/db.ts'
 import { recordExport } from '../../src/main/papers/repo.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-editor-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-editor-')
 const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: join(evidence, `${name}.png`) })
 
 let passed = 0
@@ -129,8 +128,8 @@ const call = <T>(page: Page, fn: (wb: WB) => Promise<T>): Promise<T> => page.eva
 
 // ---------- 开始 ----------
 buildTo('out-editor4')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-editor-data-'))
-const userDataDir = mkdtempSync(join(tmpdir(), 'ewb-editor-user-'))
+const dataDir = makeTempDir('ewb-editor-data-')
+const userDataDir = makeTempDir('ewb-editor-user-')
 const { questionIds } = seedDataDir(dataDir)
 // 真实组卷网的来源卷标题有 40 多字，下拉框里最长的选项不能撑宽左栏
 const LONG_TITLES = [
@@ -147,8 +146,8 @@ const [qChoice, qBlank, qCalc, qSolve, qCloze] = questionIds
 // 样例数据里的 PNG 字节本身是损坏的（CRC 与压缩数据都不对），界面上只会显示破图；
 // 这里把数据目录里那个文件换成同尺寸的有效 PNG，让截图和图片相关的断言反映真实使用
 for (const name of readdirSync(join(dataDir, 'assets')).filter((n) => n.endsWith('.png'))) writeFileSync(join(dataDir, 'assets', name), solidPng(96, 48, [196, 214, 242]))
-const exportDir = mkdtempSync(join(tmpdir(), 'ewb-editor-out-'))
-const imagePath = join(mkdtempSync(join(tmpdir(), 'ewb-editor-img-')), '蓝色示意图.png')
+const exportDir = makeTempDir('ewb-editor-out-')
+const imagePath = join(makeTempDir('ewb-editor-img-'), '蓝色示意图.png')
 writeFileSync(imagePath, solidPng(120, 72, [43, 109, 229]))
 
 let launched: LaunchedApp = await launchApp({ outDir: 'out-editor4', dataDir, userDataDir })

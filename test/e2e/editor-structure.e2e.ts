@@ -2,15 +2,13 @@
 // 结构面板（题号方格标缺答案 / 未设分并点击定位、目标满分、拖动调大题顺序）；窄窗口的结构条。
 // 用法：node test/e2e/editor-structure.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { call, center, dragBetween, inDeskView, itemNos, itemOf, makeTempDirs, openEditor, saved, sectionAt, sectionNames, seedPaper, structureDraft, watchErrors } from './editor-support.e2e.ts'
 
-const dirs = makeTempDirs('structure')
-const evidence = process.argv[2] ?? dirs.evidence
-mkdirSync(evidence, { recursive: true })
+const dirs = makeTempDirs('structure', process.argv[2])
+const evidence = dirs.evidence
 const shot = (page: Page, name: string): Promise<Buffer> => page.screenshot({ path: join(evidence, `${name}.png`) })
 
 let passed = 0

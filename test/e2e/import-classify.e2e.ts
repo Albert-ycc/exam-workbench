@@ -4,16 +4,15 @@
 //   → 没有可补的时确认置灰 → 入库完成后直接点「粘贴链接入库」能出粘贴框
 // 用法：node test/e2e/import-classify.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { skipWithoutFixtures } from '../../scripts/fixtures.ts'
+import { evidenceDir } from '../../scripts/temp-dir.ts'
 import { ENGLISH_URL, FIXTURES, installIntercept, PAPER_URL, QUESTION_URL } from './library-intercept.e2e.ts'
 
 const PHYSICS_URL = 'https://zujuan.xkw.com/4p9000002.html'
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-import-classify-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-import-classify-')
 process.env.EWB_IMPORT_GAP_MS = '300'
 skipWithoutFixtures('入库归类端到端')
 buildTo('out-import3')

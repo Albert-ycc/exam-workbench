@@ -5,18 +5,18 @@
 // 用法：node test/e2e/export-card.e2e.ts [证据目录]；需要本机有 pdftotext / pdftoppm / pdfinfo，Word 复核用 LibreOffice（soffice）。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { fixSeedPng, sampleDraft } from '../../scripts/test-export-fixtures.ts'
 import { checkBoxEdges, checkMarks, horizontalEdges } from '../../scripts/test-export-card-checks.ts'
 import { buildCardDocument } from '../../src/main/export/card.ts'
 import { renderCardHtml } from '../../src/main/export/render-card-html.ts'
 import type { DraftSection, ExportOptions, PaperDraft, PaperItem } from '../../src/shared/domain.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-card-'))
+const evidence = evidenceDir(process.argv[2], 'ewb-export-card-')
 const filesDir = join(evidence, 'files')
 for (const d of ['files', 'mutants', 'docx-as-pdf', 'preview']) rmSync(join(evidence, d), { recursive: true, force: true })
 for (const d of [filesDir, join(evidence, 'mutants'), join(evidence, 'docx-as-pdf')]) mkdirSync(d, { recursive: true })
@@ -59,7 +59,7 @@ function stressDraft(): PaperDraft {
 }
 
 buildTo('out-export3')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-card-data-'))
+const dataDir = makeTempDir('ewb-card-data-')
 seedDataDir(dataDir)
 fixSeedPng(dataDir)
 const launched = await launchApp({ outDir: 'out-export3', dataDir })

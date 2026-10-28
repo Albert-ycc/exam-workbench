@@ -5,21 +5,19 @@
 // 六、删除正在使用的章节与标签（筛选里残留的条件一并去掉）；七、题目行显示与中性样式；八、旧筛选记录升级、几百个标签；九、三种窗口尺寸截图。
 // 用法：node test/e2e/library-classify.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Locator } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import { openDatabase } from '../../src/main/db.ts'
 import { saveQuestionMeta } from '../../src/main/library/classify.ts'
 
 const OUT = 'out-lib3'
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-library-classify-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-library-classify-')
 
 // ---------- 数据：样例 6 题 + 40 道第一单元题 ----------
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-lib-classify-data-'))
+const dataDir = makeTempDir('ewb-lib-classify-data-')
 seedDataDir(dataDir)
 const UNIT_TITLE = '样例中学2026-2027学年七年级上学期第一单元测试数学试题'
 const FILLER = 40

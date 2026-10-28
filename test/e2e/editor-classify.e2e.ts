@@ -3,7 +3,6 @@
 // 三种窗口尺寸下弹层不出屏不横向滚动、方向 C 中性样式。
 // 用法：node test/e2e/editor-classify.e2e.ts [证据目录]
 import assert from 'node:assert/strict'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { seedDataDir } from '../../scripts/seed-dev.ts'
@@ -12,9 +11,8 @@ import { saveQuestionMeta } from '../../src/main/library/classify.ts'
 import { classCount, classFilter, classKey, describeClassFilters, isStoredFilters, NO_FILTERS, normalizeFilters, pruneMissing, withoutCondition, type Filters } from '../../src/renderer/src/components/editor/libraryFilters.ts'
 import { center, dragBetween, makeTempDirs, openEditor, saved, watchErrors } from './editor-support.e2e.ts'
 
-const dirs = makeTempDirs('pane3')
-const evidence = process.argv[2] ?? dirs.evidence
-mkdirSync(evidence, { recursive: true })
+const dirs = makeTempDirs('pane3', process.argv[2])
+const evidence = dirs.evidence
 
 let passed = 0
 async function step(name: string, fn: () => Promise<void>): Promise<void> {

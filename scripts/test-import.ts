@@ -3,9 +3,8 @@
 // 去重、图片下载、入库提交、试题库查询用临时数据库与假的下载函数。
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire, stripTypeScriptTypes } from 'node:module'
-import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright'
 import { assetNameFromUrl, saveAsset } from '../src/main/assets.ts'
@@ -20,12 +19,12 @@ import { deleteQuestion, listQuestionTypes, listQuestions, listSourcePapers } fr
 import { DIFFICULTY_TIERS, difficultyTier } from '../src/shared/classify.ts'
 import { classifyZujuanUrl, normalizeImportUrl, primaryQuestionType, splitPastedLinks } from '../src/shared/library.ts'
 import { FIXTURES_DIR, skipWithoutFixtures } from './fixtures.ts'
+import { evidenceDir, makeTempDir } from './temp-dir.ts'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const FIXTURES = FIXTURES_DIR
 skipWithoutFixtures('入库测试')
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-import-'))
-mkdirSync(evidence, { recursive: true })
+const evidence = evidenceDir(process.argv[2], 'ewb-import-')
 
 let passed = 0
 function check(name: string, fn: () => void | Promise<void>): Promise<void> {
@@ -117,7 +116,7 @@ const SYNTHETIC: Record<string, string> = {
 }
 
 async function runPages(files: Record<string, string>): Promise<Record<string, PageRun>> {
-  const dir = mkdtempSync(join(tmpdir(), 'ewb-import-host-'))
+  const dir = makeTempDir('ewb-import-host-')
   writeFileSync(join(dir, 'main.cjs'), "require('electron').app.whenReady().then(() => {}); require('electron').app.on('window-all-closed', () => {})")
   const electronPath = createRequire(import.meta.url)('electron') as unknown as string
   const app = await electron.launch({ executablePath: electronPath, args: [join(dir, 'main.cjs')] })
@@ -191,7 +190,7 @@ const FILES: Record<string, string> = {
   physics: join(FIXTURES, 'zujuan-physics-8a.html'),
   question: join(FIXTURES, 'zujuan-question-math.html')
 }
-const synthDir = mkdtempSync(join(tmpdir(), 'ewb-import-synth-'))
+const synthDir = makeTempDir('ewb-import-synth-')
 for (const [name, html] of Object.entries(SYNTHETIC)) {
   FILES[name] = join(synthDir, `${name}.html`)
   writeFileSync(FILES[name], html, 'utf8')
@@ -592,7 +591,7 @@ await check('地址栏输入：只有 scheme:// 才算带协议，host:port 补 
 })
 
 console.log('入库：预览、去重、提交')
-const dataDir = mkdtempSync(join(tmpdir(), 'ewb-import-data-'))
+const dataDir = makeTempDir('ewb-import-data-')
 mkdirSync(join(dataDir, 'assets'), { recursive: true })
 const db = openDatabase(dataDir)
 try {
@@ -678,7 +677,7 @@ try {
     assert.ok(pageB.questions.every((q) => q.duplicate), '第二页的题在本次任务里已出现过')
     assert.deepEqual(commitPages(db, dataDir, [pageA]), { added: 26, skipped: 0, filled: 0 })
     // pageC 在 pageA 提交之前做的预览：全部显示为新题，提交时被核对出重复
-    const emptyDir = mkdtempSync(join(tmpdir(), 'ewb-empty-'))
+    const emptyDir = makeTempDir('ewb-empty-')
     const emptyDb = openDatabase(emptyDir)
     const stale = await preparePage(runs.physics.page, 'https://zujuan.xkw.com/3p3.html', { db: emptyDb, fetchImage: fetchOk, seen: new SeenQuestions(), pageIndex: 0 })
     emptyDb.close()
@@ -705,7 +704,7 @@ try {
   })
 
   await check('无编号题的指纹不随图片下载成败变化：同一页先失败后成功两次入库只有一道题', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'ewb-import-fp-'))
+    const dir = makeTempDir('ewb-import-fp-')
     mkdirSync(join(dir, 'assets'))
     const fresh = openDatabase(dir)
     try {
@@ -735,7 +734,7 @@ try {
   })
 
   await check('保存图片：原子写入，预置的半截文件被修复成完整大小', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'ewb-import-asset-'))
+    const dir = makeTempDir('ewb-import-asset-')
     mkdirSync(join(dir, 'assets'))
     const fresh = openDatabase(dir)
     try {
@@ -816,7 +815,7 @@ try {
   // ---------- 知识点与难度入库、补齐（每个用例各用一个全新的库） ----------
   type Db = ReturnType<typeof openDatabase>
   async function withFreshDb(fn: (fresh: Db, freshDir: string) => Promise<void>): Promise<void> {
-    const freshDir = mkdtempSync(join(tmpdir(), 'ewb-import-meta-'))
+    const freshDir = makeTempDir('ewb-import-meta-')
     mkdirSync(join(freshDir, 'assets'), { recursive: true })
     const fresh = openDatabase(freshDir)
     try {
@@ -978,7 +977,7 @@ try {
     })
     await withFreshDb(async (fresh, freshDir) => {
       // pageStale 在库里还没有这些题时做的预览（全是新题）；之后另一次入库把无知识点的版本写进库，再提交 stale
-      const emptyDir = mkdtempSync(join(tmpdir(), 'ewb-empty-meta-'))
+      const emptyDir = makeTempDir('ewb-empty-meta-')
       const emptyDb = openDatabase(emptyDir)
       const stale = await prep(emptyDb, runs.math.page)
       emptyDb.close()

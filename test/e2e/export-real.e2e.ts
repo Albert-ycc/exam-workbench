@@ -7,16 +7,16 @@
 //   环境变量 EWB_REAL_DATA=<数据目录>：复用上一次已入库的数据目录（会复制到临时目录再用），不再打开组卷网，调试版式时用，避免重复访问。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { buildTo, launchApp } from '../../scripts/e2e/app.ts'
 import { FIXTURES_DIR, skipWithoutFixtures } from '../../scripts/fixtures.ts'
+import { evidenceDir, makeTempDir } from '../../scripts/temp-dir.ts'
 import type { DraftSection, ExportOptions, LibraryQuestion, PaperDraft } from '../../src/shared/domain.ts'
 import { primaryQuestionType } from '../../src/shared/library.ts'
 
-const evidence = process.argv[2] ?? mkdtempSync(join(tmpdir(), 'ewb-export-real-'))
+const evidence = evidenceDir(process.argv[2], 'ewb-export-real-')
 const FIXTURES = FIXTURES_DIR
 const filesDir = join(evidence, 'files')
 const convDir = join(evidence, 'docx-as-pdf')
@@ -35,7 +35,7 @@ buildTo('out-export3')
 const reuse = process.env.EWB_REAL_DATA
 let dataDir: string | undefined
 if (reuse) {
-  dataDir = mkdtempSync(join(tmpdir(), 'ewb-real-data-'))
+  dataDir = makeTempDir('ewb-real-data-')
   cpSync(reuse, dataDir, { recursive: true })
 }
 const { app, window } = await launchApp({ outDir: 'out-export3', dataDir, online: true })

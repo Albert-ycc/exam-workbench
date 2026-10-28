@@ -2,10 +2,10 @@
 // 移植自调研原型的 markcheck.py / edgecheck.py，不依赖 Python；需要本机有 pdftoppm。
 // 检查本身要反向验证过才可信：test/e2e/export-card.e2e.ts 会故意改坏定位块偏移与黑框分页规则，确认这里会报错。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { CARD_MARK, CARD_PAGE } from '../src/main/export/render-card-html.ts'
+import { makeTempDir } from './temp-dir.ts'
 
 interface Gray {
   width: number
@@ -31,7 +31,7 @@ function parsePgm(buf: Buffer): Gray {
 }
 
 export function renderPages(pdf: string, dpi: number): Gray[] {
-  const dir = mkdtempSync(join(tmpdir(), 'ewb-card-check-'))
+  const dir = makeTempDir('ewb-card-check-')
   try {
     execFileSync('pdftoppm', ['-gray', '-r', String(dpi), pdf, join(dir, 'p')])
     return readdirSync(dir)

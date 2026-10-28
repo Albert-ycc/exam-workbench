@@ -3,8 +3,7 @@
 // Word 结构（选项制表位无表格框线、卷尾答案分页）、文件命名与覆盖保护、下载与版本、设置记忆。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_EXPORT_OPTIONS, normalizeExportOptions, type ExportOptions, type PaperSnapshot } from '../src/shared/domain.ts'
 import { assetPath } from '../src/main/assets.ts'
@@ -21,10 +20,11 @@ import { createExportService, type Renderers } from '../src/main/export/service.
 import { parseOptions, readExportDefaults, writeExportDefaults } from '../src/main/export/settings.ts'
 import { createPaper, getPaper, getVersion, listVersions, saveDraft } from '../src/main/papers/repo.ts'
 import { seedDataDir } from './seed-dev.ts'
+import { makeTempDir } from './temp-dir.ts'
 import { runRound2Tests } from './test-export-card.ts'
 import { allValidOptions, optionsLabel, sampleDraft, type SeedQuestion } from './test-export-fixtures.ts'
 
-const root = mkdtempSync(join(tmpdir(), 'ewb-export-test-'))
+const root = makeTempDir('ewb-export-test-')
 let passed = 0
 function check(name: string, fn: () => void | Promise<void>): Promise<void> | void {
   const done = (): void => {
